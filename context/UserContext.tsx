@@ -23,30 +23,42 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const getUser = async () => {
-      // Get the current user session
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const getUser = async () => {
+    // Get the current user session
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      if (user) {
-        // Fetch user profile including role
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, email, role')
-          .eq('id', user.id)
-          .single();
+    if (user) {
+      // Fetch user profile including role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, email, role')
+        .eq('id', user.id)
+        .single();
 
-        if (profile) {
-          setUser(profile as User);
-        }
+      if (profile) {
+        setUser(profile as User);
       }
+    } else {
+      setUser(null); // Clear user if logged out
+    }
 
-      setLoading(false);
-    };
+    setLoading(false);
+  };
 
+  useEffect(() => {
     getUser();
+
+    // Listen for login/logout events
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+      getUser(); // Refresh user data on session change
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   return <UserContext.Provider value={{ user, loading }}>{children}</UserContext.Provider>;
