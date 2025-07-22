@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
+import { LogIn, User, GanttChart } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,7 +28,8 @@ export default function LoginPage() {
       if (error) {
         setMessage(`❌ ${error.message}`);
       } else {
-        router.push('/'); // Redirect to home
+        setMessage('✅ Account created. You are now logged in.');
+        router.push('/'); // Redirect after registration
       }
     } else {
       // LOGIN user
@@ -39,11 +41,22 @@ export default function LoginPage() {
       if (error) {
         setMessage(`❌ ${error.message}`);
       } else {
-        router.push('/'); // Redirect to home
+        router.push('/'); // Redirect after login
       }
     }
 
     setLoading(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+    });
+
+    if (error) {
+      console.error('Google login error:', error.message);
+      alert('❌ Google login failed: ' + error.message);
+    }
   };
 
   return (
@@ -90,6 +103,16 @@ export default function LoginPage() {
             : isRegister
               ? 'Register'
               : 'Login'}
+        </button>
+
+        {/* Google login button */}
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 w-full justify-center"
+        >
+          <GanttChart size={18} />
+          Continue with Google
         </button>
 
         <p className="text-center text-sm">

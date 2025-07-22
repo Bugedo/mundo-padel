@@ -7,13 +7,24 @@ import { LogIn, User } from 'lucide-react';
 import LogoutButton from '@/components/LogoutButton';
 
 export default function Header() {
-  const { user } = useUser();
+  const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Close menu when user changes (login/logout)
   useEffect(() => {
     setMenuOpen(false);
   }, [user]);
+
+  if (loading) {
+    // Optionally show a skeleton or spinner
+    return (
+      <header className="bg-white shadow-md">
+        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+          <span className="text-xl font-bold">Loading...</span>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="bg-white shadow-md">
@@ -39,7 +50,7 @@ export default function Header() {
           {!user ? (
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+              className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
             >
               <LogIn size={18} />
               Login

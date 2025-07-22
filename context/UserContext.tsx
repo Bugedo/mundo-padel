@@ -23,19 +23,35 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const getUser = async () => {
-    // Get the current user session
+  const fetchUserProfile = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (user) {
-      // Fetch user profile including role
-      const { data: profile } = await supabase
+      // Try to fetch profile
+      let { data: profile, error } = await supabase
         .from('profiles')
         .select('id, email, role')
         .eq('id', user.id)
         .single();
+
+      // If profile doesn't exist → create it
+      if (!profile && !error) {
+        const { error: insertError } = await supabase.from('profiles').insert({
+          id: user.id,
+          email: user.email ?? '', // fallback
+          role: 'user', // default role
+        });
+
+        if (!insertError) {
+          profile = {
+            id: user.id,
+            email: user.email ?? '',
+            role: 'user',
+          };
+        }
+      }
 
       if (profile) {
         setUser(profile as User);
@@ -48,14 +64,13 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    getUser();
+    fetchUserProfile();
 
     // Listen for login/logout events
     const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      getUser(); // Refresh user data on session change
+      fetchUserProfile();
     });
 
-    // Cleanup listener on unmount
     return () => {
       authListener.subscription.unsubscribe();
     };
@@ -64,5 +79,4 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   return <UserContext.Provider value={{ user, loading }}>{children}</UserContext.Provider>;
 };
 
-// Hook to use user context
 export const useUser = () => useContext(UserContext);
