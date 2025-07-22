@@ -8,65 +8,100 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setMessage('');
 
-    // Sign in with Supabase
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    if (isRegister) {
+      // REGISTER user
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
+      if (error) {
+        setMessage(`❌ ${error.message}`);
+      } else {
+        router.push('/'); // Redirect to home
+      }
     } else {
-      // Redirect to home after successful login
-      router.push('/');
+      // LOGIN user
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setMessage(`❌ ${error.message}`);
+      } else {
+        router.push('/'); // Redirect to home
+      }
     }
+
+    setLoading(false);
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen">
-      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-md p-6 w-full max-w-sm">
-        <h1 className="text-2xl font-bold mb-4">Login</h1>
+    <div className="flex justify-center items-center min-h-screen bg-gray-50">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white shadow rounded p-6 w-full max-w-sm space-y-4"
+      >
+        <h1 className="text-2xl font-bold text-center">{isRegister ? 'Register' : 'Login'}</h1>
 
-        {error && <div className="bg-red-100 text-red-700 p-2 rounded mb-4">{error}</div>}
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Email</label>
+        <div>
+          <label className="block mb-1">Email</label>
           <input
             type="email"
+            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full border rounded px-3 py-2"
-            required
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Password</label>
+        <div>
+          <label className="block mb-1">Password</label>
           <input
             type="password"
+            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full border rounded px-3 py-2"
-            required
           />
         </div>
+
+        {message && <p className="text-center text-sm text-gray-600">{message}</p>}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+          className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
-          {loading ? 'Logging in...' : 'Login'}
+          {loading
+            ? isRegister
+              ? 'Registering...'
+              : 'Logging in...'
+            : isRegister
+              ? 'Register'
+              : 'Login'}
         </button>
+
+        <p className="text-center text-sm">
+          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button
+            type="button"
+            onClick={() => setIsRegister(!isRegister)}
+            className="text-blue-600 hover:underline"
+          >
+            {isRegister ? 'Login' : 'Register'}
+          </button>
+        </p>
       </form>
     </div>
   );
