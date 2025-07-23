@@ -1,37 +1,21 @@
 'use client';
 
+import React from 'react';
 import { useEffect, useState } from 'react';
 
 interface User {
   id: string;
   full_name: string | null;
   email: string;
+  phone: string | null;
   role: string;
   created_at: string;
-}
-
-interface Order {
-  id: string;
-  total_price: number;
-  status: string;
-  created_at: string;
-  order_items: {
-    id: string;
-    quantity: number;
-    price: number;
-    product: {
-      id: string;
-      name: string;
-      image_url: string;
-    };
-  }[];
 }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
-  const [orders, setOrders] = useState<Record<string, Order[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,24 +40,8 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const fetchOrders = async (userId: string) => {
-    const res = await fetch(`/api/users/${userId}/orders`, { cache: 'no-store' });
-    const data = await res.json();
-
-    if (res.ok && Array.isArray(data)) {
-      setOrders((prev) => ({ ...prev, [userId]: data }));
-    } else {
-      alert(data.error || 'Failed to load orders');
-    }
-  };
-
-  const handleToggleOrders = (userId: string) => {
-    if (expandedUserId === userId) {
-      setExpandedUserId(null);
-    } else {
-      setExpandedUserId(userId);
-      if (!orders[userId]) fetchOrders(userId);
-    }
+  const handleToggleBookings = (userId: string) => {
+    setExpandedUserId(expandedUserId === userId ? null : userId);
   };
 
   const handleDelete = async (id: string) => {
@@ -107,7 +75,6 @@ export default function UsersPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Users</h1>
 
-      {/* Search bar */}
       <div className="mb-4">
         <input
           type="text"
@@ -123,6 +90,7 @@ export default function UsersPage() {
           <tr>
             <th className="p-2 text-left">Full Name</th>
             <th className="p-2 text-left">Email</th>
+            <th className="p-2 text-left">Phone</th>
             <th className="p-2 text-left">Role</th>
             <th className="p-2 text-left">Created At</th>
             <th className="p-2 text-left">Actions</th>
@@ -130,18 +98,19 @@ export default function UsersPage() {
         </thead>
         <tbody>
           {filteredUsers.map((user) => (
-            <>
-              <tr key={user.id} className="border-t">
+            <React.Fragment key={user.id}>
+              <tr className="border-t">
                 <td className="p-2">{user.full_name || '—'}</td>
                 <td className="p-2">{user.email}</td>
+                <td className="p-2">{user.phone || '—'}</td>
                 <td className="p-2">{user.role}</td>
                 <td className="p-2">{new Date(user.created_at).toLocaleDateString()}</td>
                 <td className="p-2 flex gap-2">
                   <button
-                    onClick={() => handleToggleOrders(user.id)}
+                    onClick={() => handleToggleBookings(user.id)}
                     className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                   >
-                    {expandedUserId === user.id ? 'Hide Orders' : 'View Orders'}
+                    {expandedUserId === user.id ? 'Hide Bookings' : 'View Bookings'}
                   </button>
                   <button
                     onClick={() => handleDelete(user.id)}
@@ -151,43 +120,14 @@ export default function UsersPage() {
                   </button>
                 </td>
               </tr>
-              {/* Expanded orders row */}
               {expandedUserId === user.id && (
                 <tr>
-                  <td colSpan={5} className="p-4 bg-gray-50">
-                    {orders[user.id] ? (
-                      orders[user.id].length === 0 ? (
-                        <p className="text-gray-500">No orders found for this user.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {orders[user.id].map((order) => (
-                            <div key={order.id} className="border rounded p-3 shadow-sm">
-                              <h3 className="font-semibold">Order ID: {order.id}</h3>
-                              <p>Status: {order.status}</p>
-                              <p>Total: ${order.total_price.toFixed(2)}</p>
-                              <p>Date: {new Date(order.created_at).toLocaleDateString()}</p>
-                              <div className="mt-2">
-                                <h4 className="font-medium">Items:</h4>
-                                <ul className="list-disc pl-5">
-                                  {order.order_items.map((item) => (
-                                    <li key={item.id}>
-                                      {item.product.name} x{item.quantity} - $
-                                      {item.price.toFixed(2)}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    ) : (
-                      <p>Loading orders...</p>
-                    )}
+                  <td colSpan={6} className="p-4 bg-gray-50 text-center text-gray-500">
+                    No bookings available
                   </td>
                 </tr>
               )}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>

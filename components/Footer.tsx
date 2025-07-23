@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
         {/* Contact Info */}
         <div className="text-center md:text-left space-y-1">
-          <p>📧 merchfractal@gmail.com</p>
+          <p>Mundopadel</p>
           <p>📱 +1 (555) 123-4567</p>
           <p>© {new Date().getFullYear()} All rights reserved.</p>
         </div>
