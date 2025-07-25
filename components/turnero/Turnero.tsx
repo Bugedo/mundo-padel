@@ -2,35 +2,40 @@
 
 import { useState, useRef } from 'react';
 
-// Helper to generate 30-min time slots with labels
-const generateSlots = (startHour: number, startMinute: number, endHour: number) => {
-  const slots: { start: string; end: string }[] = [];
-  let h = startHour;
-  let m = startMinute;
-
-  while (h < endHour || (h === endHour && m === 0)) {
-    const startLabel = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-    let nextH = h;
-    let nextM = m + 30;
-    if (nextM >= 60) {
-      nextH += 1;
-      nextM = 0;
-    }
-    const endLabel = `${nextH.toString().padStart(2, '0')}:${nextM.toString().padStart(2, '0')}`;
-    slots.push({ start: startLabel, end: endLabel });
-    h = nextH;
-    m = nextM;
-  }
-
-  return slots;
-};
-
-// Mock bookings
-const mockBookings = [
-  { court_id: 0, date: '2025-07-25', start_time: '16:30', duration: 90 },
-  { court_id: 1, date: '2025-07-25', start_time: '17:00', duration: 120 },
-  { court_id: 2, date: '2025-07-25', start_time: '18:00', duration: 90 },
-  { court_id: 1, date: '2025-07-25', start_time: '19:00', duration: 60 },
+// Manual slots from 08:00 to 00:00
+const allSlots = [
+  { start: '08:00', end: '08:30' },
+  { start: '08:30', end: '09:00' },
+  { start: '09:00', end: '09:30' },
+  { start: '09:30', end: '10:00' },
+  { start: '10:00', end: '10:30' },
+  { start: '10:30', end: '11:00' },
+  { start: '11:00', end: '11:30' },
+  { start: '11:30', end: '12:00' },
+  { start: '12:00', end: '12:30' },
+  { start: '12:30', end: '13:00' },
+  { start: '13:00', end: '13:30' },
+  { start: '13:30', end: '14:00' },
+  { start: '14:00', end: '14:30' },
+  { start: '14:30', end: '15:00' },
+  { start: '15:00', end: '15:30' },
+  { start: '15:30', end: '16:00' },
+  { start: '16:00', end: '16:30' },
+  { start: '16:30', end: '17:00' },
+  { start: '17:00', end: '17:30' },
+  { start: '17:30', end: '18:00' },
+  { start: '18:00', end: '18:30' },
+  { start: '18:30', end: '19:00' },
+  { start: '19:00', end: '19:30' },
+  { start: '19:30', end: '20:00' },
+  { start: '20:00', end: '20:30' },
+  { start: '20:30', end: '21:00' },
+  { start: '21:00', end: '21:30' },
+  { start: '21:30', end: '22:00' },
+  { start: '22:00', end: '22:30' },
+  { start: '22:30', end: '23:00' },
+  { start: '23:00', end: '23:30' },
+  { start: '23:30', end: '00:00' },
 ];
 
 export default function Turnero() {
@@ -40,8 +45,10 @@ export default function Turnero() {
   const [showDurations, setShowDurations] = useState(false);
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [showEarly, setShowEarly] = useState(false);
 
-  const slots = generateSlots(16, 30, 24); // Start 16:30 to 00:00
+  // Filter slots based on "showEarly"
+  const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
 
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
@@ -59,24 +66,12 @@ export default function Turnero() {
     }
   };
 
-  // Check if all 3 courts are reserved for this slot
-  const isFullyReserved = (time: string) => {
-    const currentDate = formatDate(selectedDate);
-    const [h, m] = time.split(':').map(Number);
-    const slotMinutes = h * 60 + m;
+  // Latest allowed start time based on duration
+  const maxStartMinutes = 24 * 60 - duration;
 
-    let occupiedCourts = 0;
-
-    mockBookings.forEach((b) => {
-      if (b.date !== currentDate) return;
-      const [bh, bm] = b.start_time.split(':').map(Number);
-      const startMinutes = bh * 60 + bm;
-      if (slotMinutes >= startMinutes && slotMinutes < startMinutes + b.duration) {
-        occupiedCourts++;
-      }
-    });
-
-    return occupiedCourts >= 3;
+  // Reservation check placeholder (always false until DB)
+  const isFullyReserved = (_time: string) => {
+    return false; // Will connect to DB later
   };
 
   const isHighlighted = (time: string) => {
@@ -146,12 +141,24 @@ export default function Turnero() {
             </div>
           )}
         </div>
+
+        {/* Early hours toggle */}
+        <button
+          onClick={() => setShowEarly(!showEarly)}
+          className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
+        >
+          {showEarly ? 'Ocultar temprano' : 'Ver temprano'}
+        </button>
       </div>
 
       {/* Single timeline centered */}
       <div className="flex justify-center">
         <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
           {slots.map(({ start, end }) => {
+            const [h, m] = start.split(':').map(Number);
+            const startMinutes = h * 60 + m;
+
+            const outsideLimit = startMinutes > maxStartMinutes;
             const fullyReserved = isFullyReserved(start);
             const highlighted = isHighlighted(start);
 
@@ -165,9 +172,9 @@ export default function Turnero() {
                       ? 'bg-green-500 text-white'
                       : 'bg-white text-black'
                 }`}
-                onMouseEnter={() => !fullyReserved && setHoverSlot(start)}
+                onMouseEnter={() => !fullyReserved && !outsideLimit && setHoverSlot(start)}
                 onMouseLeave={() => setHoverSlot(null)}
-                onClick={() => !fullyReserved && setSelectedSlot(start)}
+                onClick={() => !fullyReserved && !outsideLimit && setSelectedSlot(start)}
               >
                 {start} - {end}
               </div>
@@ -184,7 +191,7 @@ export default function Turnero() {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-red-500 rounded-sm" />
-          No disponible (todas ocupadas)
+          Ocupado (todas las canchas)
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-white border border-gray-300 rounded-sm" />
