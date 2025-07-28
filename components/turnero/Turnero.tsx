@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import supabase from '@/lib/supabaseClient';
+import { useUser } from '@/context/UserContext';
 
 // Manual slots from 08:00 to 00:00
 const allSlots = [
@@ -39,6 +41,7 @@ const allSlots = [
 ];
 
 export default function Turnero() {
+  const { user, loading } = useUser();
   const baseDate = useRef(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
@@ -46,11 +49,36 @@ export default function Turnero() {
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [courts, setCourts] = useState<any[]>([]);
 
-  // Filter slots based on "showEarly"
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
-
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+  // Fetch all courts
+  const fetchCourts = async () => {
+    const { data, error } = await supabase.from('courts').select('id, name');
+    if (!error && data) setCourts(data);
+  };
+
+  // Fetch bookings with duration
+  const fetchBookings = async () => {
+    const dateString = formatDate(selectedDate);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('id, user_id, court_id, date, start_time, end_time, duration_minutes')
+      .eq('date', dateString);
+
+    if (!error && data) setBookings(data);
+  };
+
+  useEffect(() => {
+    fetchCourts();
+  }, []);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [selectedDate]);
 
   const changeDate = (offset: number) => {
     const newDate = new Date(selectedDate);
@@ -66,12 +94,64 @@ export default function Turnero() {
     }
   };
 
-  // Latest allowed start time based on duration
-  const maxStartMinutes = 24 * 60 - duration;
+  const createBooking = async () => {
+    if (!user || loading || !selectedSlot) return;
 
-  // Reservation check placeholder (always false until DB)
-  const isFullyReserved = (_time: string) => {
-    return false; // Will connect to DB later
+    const dateString = formatDate(selectedDate);
+
+    const [h, m] = selectedSlot.split(':').map(Number);
+    const startMinutes = h * 60 + m;
+    const endMinutes = startMinutes + duration;
+    const endH = Math.floor(endMinutes / 60) % 24;
+    const endM = endMinutes % 60;
+
+    const start_time = selectedSlot;
+    const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+
+    const occupied = bookings.filter((b) => b.start_time === start_time).map((b) => b.court_id);
+
+    const availableCourt = courts.find((c) => !occupied.includes(c.id));
+
+    if (!availableCourt) {
+      alert('All courts are occupied in this slot');
+      return;
+    }
+
+    const { error } = await supabase.from('bookings').insert({
+      user_id: user.id,
+      created_by: user.id,
+      court_id: availableCourt.id,
+      date: dateString,
+      start_time,
+      end_time,
+      duration_minutes: duration,
+    });
+
+    if (!error) {
+      fetchBookings();
+      setSelectedSlot(null);
+      alert('Booking created successfully');
+    } else {
+      console.error('Insert error:', error);
+    }
+  };
+
+  // Fully occupied if all courts have this slot booked
+  const isFullyReserved = (time: string) => {
+    const count = bookings.filter((b) => {
+      const start = b.start_time;
+      const dur = b.duration_minutes || 90;
+      const [h, m] = start.split(':').map(Number);
+      const bookingStart = h * 60 + m;
+      const bookingEnd = bookingStart + dur;
+
+      const [th, tm] = time.split(':').map(Number);
+      const checkMinutes = th * 60 + tm;
+
+      return checkMinutes >= bookingStart && checkMinutes < bookingEnd;
+    }).length;
+
+    return courts.length > 0 && count >= courts.length;
   };
 
   const isHighlighted = (time: string) => {
@@ -88,18 +168,16 @@ export default function Turnero() {
 
   return (
     <section className="p-6 bg-background text-white min-h-[70vh]">
-      {/* Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        {/* Date selector */}
         <div className="flex items-center gap-4">
           <button
             onClick={() => changeDate(-1)}
             className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
           >
-            ← Día anterior
+            ← Previous day
           </button>
           <span className="font-semibold">
-            {selectedDate.toLocaleDateString('es-AR', {
+            {selectedDate.toLocaleDateString('en-US', {
               weekday: 'long',
               month: 'long',
               day: 'numeric',
@@ -109,11 +187,10 @@ export default function Turnero() {
             onClick={() => changeDate(1)}
             className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
           >
-            Día siguiente →
+            Next day →
           </button>
         </div>
 
-        {/* Duration dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowDurations(!showDurations)}
@@ -142,30 +219,28 @@ export default function Turnero() {
           )}
         </div>
 
-        {/* Early hours toggle */}
         <button
           onClick={() => setShowEarly(!showEarly)}
           className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
         >
-          {showEarly ? 'Ocultar temprano' : 'Ver temprano'}
+          {showEarly ? 'Hide early' : 'Show early'}
         </button>
       </div>
 
-      {/* Single timeline centered */}
       <div className="flex justify-center">
         <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
           {slots.map(({ start, end }) => {
             const [h, m] = start.split(':').map(Number);
             const startMinutes = h * 60 + m;
 
-            const outsideLimit = startMinutes > maxStartMinutes;
+            const outsideLimit = startMinutes > 24 * 60 - duration;
             const fullyReserved = isFullyReserved(start);
             const highlighted = isHighlighted(start);
 
             return (
               <div
                 key={start}
-                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors ${
+                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors cursor-pointer ${
                   fullyReserved
                     ? 'bg-red-500 text-white'
                     : highlighted
@@ -183,21 +258,16 @@ export default function Turnero() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-4 mt-4 text-sm text-primary justify-center">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded-sm" />
-          Seleccionado / Hover
+      {selectedSlot && user && !loading && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={createBooking}
+            className="bg-green-600 px-6 py-2 rounded text-white hover:bg-green-700"
+          >
+            Confirm booking
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-500 rounded-sm" />
-          Ocupado (todas las canchas)
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white border border-gray-300 rounded-sm" />
-          Disponible
-        </div>
-      </div>
+      )}
     </section>
   );
 }
