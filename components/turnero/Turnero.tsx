@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
+import { useBookings } from './hooks/useBookings';
+import { useCourts } from './hooks/useCourts';
+import supabase from '@/lib/supabaseClient';
+import DurationSelector from './DurationSelector';
+import SlotGrid from './SlotGrid';
 
-// Manual slots from 08:00 to 00:00
 const allSlots = [
   { start: '08:00', end: '08:30' },
   { start: '08:30', end: '09:00' },
@@ -45,43 +48,27 @@ export default function Turnero() {
   const baseDate = useRef(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
-  const [showDurations, setShowDurations] = useState(false);
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [courts, setCourts] = useState<any[]>([]);
+
+  const { bookings, fetchBookings } = useBookings();
+  const { courts, fetchCourts } = useCourts();
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-  const fetchCourts = async () => {
-    const { data, error } = await supabase.from('courts').select('id, name');
-    if (!error && data) setCourts(data);
-  };
-
-  const fetchBookings = async () => {
-    const dateString = formatDate(selectedDate);
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('id, user_id, court_id, date, start_time, end_time, duration_minutes')
-      .eq('date', dateString);
-
-    if (!error && data) setBookings(data);
-  };
-
   useEffect(() => {
     fetchCourts();
-  }, []);
+  }, [fetchCourts]);
 
   useEffect(() => {
-    fetchBookings();
-  }, [selectedDate]);
+    fetchBookings(formatDate(selectedDate));
+  }, [selectedDate, fetchBookings]);
 
   const changeDate = (offset: number) => {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + offset);
-
     const minDate = new Date(baseDate.current);
     const maxDate = new Date(baseDate.current);
     maxDate.setDate(baseDate.current.getDate() + 6);
@@ -92,54 +79,8 @@ export default function Turnero() {
     }
   };
 
-  // ✅ Only mark occupied if all courts are busy at the start of the block
-  const isFullyReserved = (time: string) => {
-    const [th, tm] = time.split(':').map(Number);
-    const checkMinutes = th * 60 + tm;
-
-    const count = bookings.filter((b) => {
-      const [bh, bm] = b.start_time.split(':').map(Number);
-      const bStart = bh * 60 + bm;
-      const bEnd = bStart + (b.duration_minutes || 90);
-
-      return checkMinutes >= bStart && checkMinutes < bEnd;
-    }).length;
-
-    return courts.length > 0 && count >= courts.length;
-  };
-
-  // ✅ Validate if a duration fits without overlapping fully booked blocks
-  const canFitDuration = (start_time: string, dur: number) => {
-    const [h, m] = start_time.split(':').map(Number);
-    const startMinutes = h * 60 + m;
-    const endMinutes = startMinutes + dur;
-
-    for (let minute = startMinutes; minute < endMinutes; minute += 30) {
-      const count = bookings.filter((b) => {
-        const [bh, bm] = b.start_time.split(':').map(Number);
-        const bStart = bh * 60 + bm;
-        const bEnd = bStart + (b.duration_minutes || 90);
-
-        // ✅ Allow if the minute is exactly equal to the end of a booking
-        if (minute === bEnd) return false;
-
-        return minute >= bStart && minute < bEnd;
-      }).length;
-
-      if (courts.length > 0 && count >= courts.length) {
-        return false;
-      }
-    }
-
-    return true;
-  };
-
   const createBooking = async () => {
     if (!user || loading || !selectedSlot) return;
-    if (!canFitDuration(selectedSlot, duration)) {
-      alert('Not enough space for this duration in the selected slot');
-      return;
-    }
 
     const dateString = formatDate(selectedDate);
 
@@ -153,9 +94,7 @@ export default function Turnero() {
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
     const occupied = bookings.filter((b) => b.start_time === start_time).map((b) => b.court_id);
-
     const availableCourt = courts.find((c) => !occupied.includes(c.id));
-
     if (!availableCourt) {
       alert('All courts are occupied in this slot');
       return;
@@ -172,25 +111,10 @@ export default function Turnero() {
     });
 
     if (!error) {
-      fetchBookings();
+      fetchBookings(dateString);
       setSelectedSlot(null);
       alert('Booking created successfully');
-    } else {
-      console.error('Insert error:', error);
     }
-  };
-
-  const isHighlighted = (time: string) => {
-    const ref = selectedSlot || hoverSlot;
-    if (!ref) return false;
-    if (!canFitDuration(ref, duration)) return false;
-
-    const [h, m] = time.split(':').map(Number);
-    const [rh, rm] = ref.split(':').map(Number);
-    const slotMinutes = h * 60 + m;
-    const refMinutes = rh * 60 + rm;
-
-    return slotMinutes >= refMinutes && slotMinutes < refMinutes + duration;
   };
 
   return (
@@ -218,33 +142,7 @@ export default function Turnero() {
           </button>
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowDurations(!showDurations)}
-            className="bg-accent text-background px-4 py-2 rounded"
-          >
-            {duration} min
-          </button>
-          {showDurations && (
-            <div className="absolute mt-2 bg-muted rounded shadow-lg flex flex-col">
-              {[60, 90, 120].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => {
-                    setDuration(d as 60 | 90 | 120);
-                    setShowDurations(false);
-                    setSelectedSlot(null);
-                  }}
-                  className={`px-4 py-2 hover:bg-muted/70 ${
-                    d === duration ? 'bg-accent text-background' : 'text-primary'
-                  }`}
-                >
-                  {d} min
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <DurationSelector duration={duration} onChangeAction={(d) => setDuration(d)} />
 
         <button
           onClick={() => setShowEarly(!showEarly)}
@@ -254,45 +152,16 @@ export default function Turnero() {
         </button>
       </div>
 
-      <div className="flex justify-center">
-        <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
-          {slots.map(({ start, end }) => {
-            const [h, m] = start.split(':').map(Number);
-            const startMinutes = h * 60 + m;
-
-            const outsideLimit = startMinutes > 24 * 60 - duration;
-            const fullyReserved = isFullyReserved(start);
-            const canFit = canFitDuration(start, duration);
-            const highlighted = isHighlighted(start);
-
-            return (
-              <div
-                key={start}
-                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors cursor-pointer ${
-                  fullyReserved
-                    ? 'bg-red-500 text-white'
-                    : highlighted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-white text-black'
-                }`}
-                onMouseEnter={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) {
-                    setHoverSlot(start);
-                  }
-                }}
-                onMouseLeave={() => setHoverSlot(null)}
-                onClick={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) {
-                    setSelectedSlot(start);
-                  }
-                }}
-              >
-                {start} - {end}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <SlotGrid
+        slots={slots}
+        bookings={bookings}
+        courts={courts}
+        duration={duration}
+        hoverSlot={hoverSlot}
+        setHoverSlotAction={setHoverSlot}
+        selectedSlot={selectedSlot}
+        setSelectedSlotAction={setSelectedSlot}
+      />
 
       {selectedSlot && user && !loading && (
         <div className="flex justify-center mt-6">
