@@ -55,13 +55,11 @@ export default function Turnero() {
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-  // Fetch all courts
   const fetchCourts = async () => {
     const { data, error } = await supabase.from('courts').select('id, name');
     if (!error && data) setCourts(data);
   };
 
-  // Fetch bookings with duration
   const fetchBookings = async () => {
     const dateString = formatDate(selectedDate);
     const { data, error } = await supabase
@@ -94,8 +92,54 @@ export default function Turnero() {
     }
   };
 
+  // ✅ Only mark occupied if all courts are busy at the start of the block
+  const isFullyReserved = (time: string) => {
+    const [th, tm] = time.split(':').map(Number);
+    const checkMinutes = th * 60 + tm;
+
+    const count = bookings.filter((b) => {
+      const [bh, bm] = b.start_time.split(':').map(Number);
+      const bStart = bh * 60 + bm;
+      const bEnd = bStart + (b.duration_minutes || 90);
+
+      return checkMinutes >= bStart && checkMinutes < bEnd;
+    }).length;
+
+    return courts.length > 0 && count >= courts.length;
+  };
+
+  // ✅ Validate if a duration fits without overlapping fully booked blocks
+  const canFitDuration = (start_time: string, dur: number) => {
+    const [h, m] = start_time.split(':').map(Number);
+    const startMinutes = h * 60 + m;
+    const endMinutes = startMinutes + dur;
+
+    for (let minute = startMinutes; minute < endMinutes; minute += 30) {
+      const count = bookings.filter((b) => {
+        const [bh, bm] = b.start_time.split(':').map(Number);
+        const bStart = bh * 60 + bm;
+        const bEnd = bStart + (b.duration_minutes || 90);
+
+        // ✅ Allow if the minute is exactly equal to the end of a booking
+        if (minute === bEnd) return false;
+
+        return minute >= bStart && minute < bEnd;
+      }).length;
+
+      if (courts.length > 0 && count >= courts.length) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const createBooking = async () => {
     if (!user || loading || !selectedSlot) return;
+    if (!canFitDuration(selectedSlot, duration)) {
+      alert('Not enough space for this duration in the selected slot');
+      return;
+    }
 
     const dateString = formatDate(selectedDate);
 
@@ -136,27 +180,10 @@ export default function Turnero() {
     }
   };
 
-  // Fully occupied if all courts have this slot booked
-  const isFullyReserved = (time: string) => {
-    const count = bookings.filter((b) => {
-      const start = b.start_time;
-      const dur = b.duration_minutes || 90;
-      const [h, m] = start.split(':').map(Number);
-      const bookingStart = h * 60 + m;
-      const bookingEnd = bookingStart + dur;
-
-      const [th, tm] = time.split(':').map(Number);
-      const checkMinutes = th * 60 + tm;
-
-      return checkMinutes >= bookingStart && checkMinutes < bookingEnd;
-    }).length;
-
-    return courts.length > 0 && count >= courts.length;
-  };
-
   const isHighlighted = (time: string) => {
     const ref = selectedSlot || hoverSlot;
     if (!ref) return false;
+    if (!canFitDuration(ref, duration)) return false;
 
     const [h, m] = time.split(':').map(Number);
     const [rh, rm] = ref.split(':').map(Number);
@@ -235,6 +262,7 @@ export default function Turnero() {
 
             const outsideLimit = startMinutes > 24 * 60 - duration;
             const fullyReserved = isFullyReserved(start);
+            const canFit = canFitDuration(start, duration);
             const highlighted = isHighlighted(start);
 
             return (
@@ -247,9 +275,17 @@ export default function Turnero() {
                       ? 'bg-green-500 text-white'
                       : 'bg-white text-black'
                 }`}
-                onMouseEnter={() => !fullyReserved && !outsideLimit && setHoverSlot(start)}
+                onMouseEnter={() => {
+                  if (!fullyReserved && !outsideLimit && canFit) {
+                    setHoverSlot(start);
+                  }
+                }}
                 onMouseLeave={() => setHoverSlot(null)}
-                onClick={() => !fullyReserved && !outsideLimit && setSelectedSlot(start)}
+                onClick={() => {
+                  if (!fullyReserved && !outsideLimit && canFit) {
+                    setSelectedSlot(start);
+                  }
+                }}
               >
                 {start} - {end}
               </div>
