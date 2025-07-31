@@ -22,7 +22,8 @@ export function useBookings() {
     const { data, error } = await supabase
       .from('bookings')
       .select('id, user_id, court_id, date, start_time, end_time, duration_minutes')
-      .eq('date', date);
+      .eq('date', date)
+      .eq('confirmed', true);
 
     if (!error && data) setBookings(data as Booking[]);
     setLoading(false);

@@ -108,6 +108,9 @@ export default function Turnero() {
       start_time,
       end_time,
       duration_minutes: duration,
+      confirmed: false,
+      present: false,
+      cancelled: false,
     });
 
     if (!error) {
