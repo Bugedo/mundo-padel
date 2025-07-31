@@ -22,7 +22,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     redirect('/');
   }
 
-  const navItems = [{ name: 'Users', href: '/admin/users' }];
+  const navItems = [
+    { name: 'Users', href: '/admin/users' },
+    { name: 'Bookings', href: '/admin/bookings' },
+  ];
 
   return (
     <div className="flex min-h-screen">
