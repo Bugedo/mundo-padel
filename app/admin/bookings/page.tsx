@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 interface Booking {
   id: string;
   user_id: string;
-  court_id: string;
+  court: number | null;
   date: string;
   start_time: string;
   end_time: string;
@@ -13,6 +13,7 @@ interface Booking {
   confirmed: boolean;
   present: boolean;
   cancelled: boolean;
+  expires_at?: string;
   user?: {
     full_name: string;
   };
@@ -24,6 +25,7 @@ export default function BookingsAdminPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [timeLeft, setTimeLeft] = useState<{ [id: string]: number }>({});
 
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
@@ -46,6 +48,25 @@ export default function BookingsAdminPage() {
   useEffect(() => {
     fetchBookings();
   }, [selectedDate]);
+
+  // Timer que actualiza cada segundo
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const updated: { [id: string]: number } = {};
+
+      bookings.forEach((b) => {
+        if (b.expires_at && !b.confirmed) {
+          const diff = Math.max(0, Math.floor((new Date(b.expires_at).getTime() - now) / 1000));
+          updated[b.id] = diff;
+        }
+      });
+
+      setTimeLeft(updated);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [bookings]);
 
   const changeDate = (offset: number) => {
     const newDate = new Date(selectedDate);
@@ -118,45 +139,61 @@ export default function BookingsAdminPage() {
             <th className="p-2">Time</th>
             <th className="p-2">Duration</th>
             <th className="p-2">Confirmed</th>
+            <th className="p-2">Timer</th>
             <th className="p-2">Present</th>
             <th className="p-2">Cancelled</th>
           </tr>
         </thead>
         <tbody>
-          {filteredBookings.map((b) => (
-            <tr key={b.id} className="border-t">
-              <td className="p-2">{b.user?.full_name || '—'}</td>
-              <td className="p-2">{b.court_id}</td>
-              <td className="p-2">
-                {b.start_time} - {b.end_time}
-              </td>
-              <td className="p-2">{b.duration_minutes} min</td>
-              <td className="p-2">
-                <input
-                  type="checkbox"
-                  checked={b.confirmed}
-                  onChange={(e) => updateBooking(b.id, 'confirmed', e.target.checked)}
-                />
-              </td>
-              <td className="p-2">
-                <input
-                  type="checkbox"
-                  checked={b.present}
-                  onChange={(e) => updateBooking(b.id, 'present', e.target.checked)}
-                />
-              </td>
-              <td className="p-2">
-                <input
-                  type="checkbox"
-                  checked={b.cancelled}
-                  onChange={(e) => updateBooking(b.id, 'cancelled', e.target.checked)}
-                />
-              </td>
-            </tr>
-          ))}
+          {filteredBookings.map((b) => {
+            const remaining = timeLeft[b.id] || 0;
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+
+            return (
+              <tr key={b.id} className="border-t">
+                <td className="p-2">{b.user?.full_name || '—'}</td>
+                <td className="p-2">{b.court || '—'}</td>
+                <td className="p-2">
+                  {b.start_time} - {b.end_time}
+                </td>
+                <td className="p-2">{b.duration_minutes} min</td>
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={b.confirmed}
+                    onChange={(e) => updateBooking(b.id, 'confirmed', e.target.checked)}
+                  />
+                </td>
+                <td className="p-2">
+                  {!b.confirmed && b.expires_at ? (
+                    <span className={remaining < 60 ? 'text-red-600 font-bold' : ''}>
+                      {minutes}:{seconds.toString().padStart(2, '0')}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={b.present}
+                    onChange={(e) => updateBooking(b.id, 'present', e.target.checked)}
+                  />
+                </td>
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={b.cancelled}
+                    onChange={(e) => updateBooking(b.id, 'cancelled', e.target.checked)}
+                  />
+                </td>
+              </tr>
+            );
+          })}
           {filteredBookings.length === 0 && (
             <tr>
-              <td colSpan={7} className="p-4 text-center text-gray-500">
+              <td colSpan={8} className="p-4 text-center text-gray-500">
                 No bookings for this date or filter
               </td>
             </tr>

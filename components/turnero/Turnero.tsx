@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
 
-// Manual slots from 08:00 to 00:00
 const allSlots = [
   { start: '08:00', end: '08:30' },
   { start: '08:30', end: '09:00' },
@@ -50,32 +49,22 @@ export default function Turnero() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
   const [bookings, setBookings] = useState<any[]>([]);
-  const [courts, setCourts] = useState<any[]>([]);
+  const [pendingBooking, setPendingBooking] = useState<any | null>(null);
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
-  const fetchCourts = async () => {
-    const { data, error } = await supabase.from('courts').select('id, name');
-    if (!error && data) setCourts(data);
-  };
 
   const fetchBookings = async () => {
     const dateString = formatDate(selectedDate);
     const { data, error } = await supabase
       .from('bookings')
       .select(
-        'id, user_id, court_id, date, start_time, end_time, duration_minutes, confirmed, present, cancelled',
+        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at',
       )
-      .eq('date', dateString)
-      .eq('confirmed', true); // ✅ Solo mostrar reservas confirmadas
+      .eq('date', dateString);
 
     if (!error && data) setBookings(data);
   };
-
-  useEffect(() => {
-    fetchCourts();
-  }, []);
 
   useEffect(() => {
     fetchBookings();
@@ -92,6 +81,7 @@ export default function Turnero() {
     if (newDate >= minDate && newDate <= maxDate) {
       setSelectedDate(newDate);
       setSelectedSlot(null);
+      setPendingBooking(null);
     }
   };
 
@@ -103,10 +93,11 @@ export default function Turnero() {
       const [bh, bm] = b.start_time.split(':').map(Number);
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
-      return checkMinutes >= bStart && checkMinutes < bEnd;
+      const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+      return active && checkMinutes >= bStart && checkMinutes < bEnd;
     }).length;
 
-    return courts.length > 0 && count >= courts.length;
+    return count >= 3;
   };
 
   const canFitDuration = (start_time: string, dur: number) => {
@@ -119,17 +110,17 @@ export default function Turnero() {
         const [bh, bm] = b.start_time.split(':').map(Number);
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
-        return minute >= bStart && minute < bEnd;
+        const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+        return active && minute >= bStart && minute < bEnd;
       }).length;
 
-      if (courts.length > 0 && count >= courts.length) {
-        return false;
-      }
+      if (count >= 3) return false;
     }
 
     return true;
   };
 
+  // This version checks overlapping ranges for court assignment
   const createBooking = async () => {
     if (!user || loading || !selectedSlot) return;
     if (!canFitDuration(selectedSlot, duration)) {
@@ -148,31 +139,49 @@ export default function Turnero() {
     const start_time = selectedSlot;
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
-    const occupied = bookings.filter((b) => b.start_time === start_time).map((b) => b.court_id);
-    const availableCourt = courts.find((c) => !occupied.includes(c.id));
+    // Check overlapping bookings
+    const takenCourts = bookings
+      .filter((b) => {
+        const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+        if (!active) return false;
+
+        const [bh, bm] = b.start_time.split(':').map(Number);
+        const bStart = bh * 60 + bm;
+        const [eh, em] = b.end_time.split(':').map(Number);
+        const bEnd = eh * 60 + em;
+
+        // Overlap check
+        return startMinutes < bEnd && endMinutes > bStart;
+      })
+      .map((b) => b.court);
+
+    const availableCourt = [1, 2, 3].find((c) => !takenCourts.includes(c));
 
     if (!availableCourt) {
       alert('All courts are occupied in this slot');
       return;
     }
 
-    const { error } = await supabase.from('bookings').insert({
-      user_id: user.id,
-      created_by: user.id,
-      court_id: availableCourt.id,
-      date: dateString,
-      start_time,
-      end_time,
-      duration_minutes: duration,
-      confirmed: false,
-      present: false,
-      cancelled: false,
-    });
+    const { data, error } = await supabase
+      .from('bookings')
+      .insert({
+        user_id: user.id,
+        created_by: user.id,
+        court: availableCourt,
+        date: dateString,
+        start_time,
+        end_time,
+        duration_minutes: duration,
+        confirmed: false,
+        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      })
+      .select()
+      .single();
 
-    if (!error) {
+    if (!error && data) {
+      setPendingBooking(data);
       fetchBookings();
       setSelectedSlot(null);
-      alert('Booking created successfully (waiting for confirmation)');
     } else {
       console.error('Insert error:', error);
     }
@@ -193,7 +202,7 @@ export default function Turnero() {
 
   return (
     <section className="p-6 bg-background text-white min-h-[70vh]">
-      {/* Encabezado de navegación */}
+      {/* Date navigation */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div className="flex items-center gap-4">
           <button
@@ -251,7 +260,7 @@ export default function Turnero() {
         </button>
       </div>
 
-      {/* Grid de slots */}
+      {/* Slots grid */}
       <div className="flex justify-center">
         <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
           {slots.map(({ start, end }) => {
@@ -287,7 +296,7 @@ export default function Turnero() {
         </div>
       </div>
 
-      {/* Botón de confirmar */}
+      {/* Confirm button */}
       {selectedSlot && user && !loading && (
         <div className="flex justify-center mt-6">
           <button
@@ -298,6 +307,44 @@ export default function Turnero() {
           </button>
         </div>
       )}
+
+      {/* Pending booking timer */}
+      {pendingBooking && (
+        <BookingPending booking={pendingBooking} onExpire={() => setPendingBooking(null)} />
+      )}
     </section>
+  );
+}
+
+function BookingPending({ booking, onExpire }: { booking: any; onExpire: () => void }) {
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    const expires = new Date(booking.expires_at).getTime();
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((expires - now) / 1000));
+      setRemaining(diff);
+
+      if (diff <= 0) {
+        clearInterval(interval);
+        onExpire();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [booking.expires_at, onExpire]);
+
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+
+  return (
+    <div className="mt-4 bg-yellow-100 p-4 rounded text-black text-center">
+      <p className="mb-2">To confirm your booking, contact us to pay the deposit.</p>
+      <p className="font-bold">
+        Time remaining: {minutes}:{seconds.toString().padStart(2, '0')}
+      </p>
+    </div>
   );
 }
