@@ -64,8 +64,11 @@ export default function Turnero() {
     const dateString = formatDate(selectedDate);
     const { data, error } = await supabase
       .from('bookings')
-      .select('id, user_id, court_id, date, start_time, end_time, duration_minutes')
-      .eq('date', dateString);
+      .select(
+        'id, user_id, court_id, date, start_time, end_time, duration_minutes, confirmed, present, cancelled',
+      )
+      .eq('date', dateString)
+      .eq('confirmed', true); // ✅ Solo mostrar reservas confirmadas
 
     if (!error && data) setBookings(data);
   };
@@ -92,7 +95,6 @@ export default function Turnero() {
     }
   };
 
-  // ✅ Only mark occupied if all courts are busy at the start of the block
   const isFullyReserved = (time: string) => {
     const [th, tm] = time.split(':').map(Number);
     const checkMinutes = th * 60 + tm;
@@ -101,14 +103,12 @@ export default function Turnero() {
       const [bh, bm] = b.start_time.split(':').map(Number);
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
-
       return checkMinutes >= bStart && checkMinutes < bEnd;
     }).length;
 
     return courts.length > 0 && count >= courts.length;
   };
 
-  // ✅ Validate if a duration fits without overlapping fully booked blocks
   const canFitDuration = (start_time: string, dur: number) => {
     const [h, m] = start_time.split(':').map(Number);
     const startMinutes = h * 60 + m;
@@ -119,10 +119,6 @@ export default function Turnero() {
         const [bh, bm] = b.start_time.split(':').map(Number);
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
-
-        // ✅ Allow if the minute is exactly equal to the end of a booking
-        if (minute === bEnd) return false;
-
         return minute >= bStart && minute < bEnd;
       }).length;
 
@@ -153,7 +149,6 @@ export default function Turnero() {
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
     const occupied = bookings.filter((b) => b.start_time === start_time).map((b) => b.court_id);
-
     const availableCourt = courts.find((c) => !occupied.includes(c.id));
 
     if (!availableCourt) {
@@ -169,12 +164,15 @@ export default function Turnero() {
       start_time,
       end_time,
       duration_minutes: duration,
+      confirmed: false,
+      present: false,
+      cancelled: false,
     });
 
     if (!error) {
       fetchBookings();
       setSelectedSlot(null);
-      alert('Booking created successfully');
+      alert('Booking created successfully (waiting for confirmation)');
     } else {
       console.error('Insert error:', error);
     }
@@ -195,6 +193,7 @@ export default function Turnero() {
 
   return (
     <section className="p-6 bg-background text-white min-h-[70vh]">
+      {/* Encabezado de navegación */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div className="flex items-center gap-4">
           <button
@@ -235,9 +234,7 @@ export default function Turnero() {
                     setShowDurations(false);
                     setSelectedSlot(null);
                   }}
-                  className={`px-4 py-2 hover:bg-muted/70 ${
-                    d === duration ? 'bg-accent text-background' : 'text-primary'
-                  }`}
+                  className={`px-4 py-2 hover:bg-muted/70 ${d === duration ? 'bg-accent text-background' : 'text-primary'}`}
                 >
                   {d} min
                 </button>
@@ -254,12 +251,12 @@ export default function Turnero() {
         </button>
       </div>
 
+      {/* Grid de slots */}
       <div className="flex justify-center">
         <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
           {slots.map(({ start, end }) => {
             const [h, m] = start.split(':').map(Number);
             const startMinutes = h * 60 + m;
-
             const outsideLimit = startMinutes > 24 * 60 - duration;
             const fullyReserved = isFullyReserved(start);
             const canFit = canFitDuration(start, duration);
@@ -276,15 +273,11 @@ export default function Turnero() {
                       : 'bg-white text-black'
                 }`}
                 onMouseEnter={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) {
-                    setHoverSlot(start);
-                  }
+                  if (!fullyReserved && !outsideLimit && canFit) setHoverSlot(start);
                 }}
                 onMouseLeave={() => setHoverSlot(null)}
                 onClick={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) {
-                    setSelectedSlot(start);
-                  }
+                  if (!fullyReserved && !outsideLimit && canFit) setSelectedSlot(start);
                 }}
               >
                 {start} - {end}
@@ -294,6 +287,7 @@ export default function Turnero() {
         </div>
       </div>
 
+      {/* Botón de confirmar */}
       {selectedSlot && user && !loading && (
         <div className="flex justify-center mt-6">
           <button
