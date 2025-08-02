@@ -60,7 +60,7 @@ const allSlots = [
   { start: '23:30', end: '00:00' },
 ];
 
-const defaultSlots = allSlots.filter(slot => slot.start >= '16:30');
+const defaultSlots = allSlots.filter((slot) => slot.start >= '16:30');
 
 export default function BookingsAdminPage() {
   const baseDate = useRef(new Date());
@@ -69,7 +69,7 @@ export default function BookingsAdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<{ [id: string]: number }>({});
-  
+
   // Formulario de creación manual
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string>('');
@@ -133,9 +133,10 @@ export default function BookingsAdminPage() {
 
   // Filtrar usuarios por búsqueda
   useEffect(() => {
-    const filtered = users.filter(user => 
-      user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+    const filtered = users.filter(
+      (user) =>
+        user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(userSearchTerm.toLowerCase()),
     );
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
@@ -183,8 +184,9 @@ export default function BookingsAdminPage() {
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
     // Verificar disponibilidad
-    const conflictingBookings = bookings.filter(b => {
-      const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+    const conflictingBookings = bookings.filter((b) => {
+      const active =
+        (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
       if (!active) return false;
 
       const [bh, bm] = b.start_time.split(':').map(Number);
@@ -200,8 +202,8 @@ export default function BookingsAdminPage() {
       return;
     }
 
-    const takenCourts = conflictingBookings.map(b => b.court);
-    const availableCourt = [1, 2, 3].find(c => !takenCourts.includes(c));
+    const takenCourts = conflictingBookings.map((b) => b.court);
+    const availableCourt = [1, 2, 3].find((c) => !takenCourts.includes(c));
 
     const res = await fetch('/api/bookings', {
       method: 'POST',
@@ -230,10 +232,10 @@ export default function BookingsAdminPage() {
   };
 
   // Filtrar reservas por estado
-  const pendingBookings = bookings.filter(b => !b.confirmed && !b.cancelled);
-  const confirmedBookings = bookings.filter(b => b.confirmed && !b.present && !b.cancelled);
-  const finishedBookings = bookings.filter(b => b.confirmed && b.present);
-  const cancelledBookings = bookings.filter(b => b.cancelled);
+  const pendingBookings = bookings.filter((b) => !b.confirmed && !b.cancelled);
+  const confirmedBookings = bookings.filter((b) => b.confirmed && !b.present && !b.cancelled);
+  const finishedBookings = bookings.filter((b) => b.confirmed && b.present);
+  const cancelledBookings = bookings.filter((b) => b.cancelled);
 
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
@@ -274,7 +276,7 @@ export default function BookingsAdminPage() {
       {showCreateForm && (
         <div className="bg-gray-50 p-4 rounded border mb-6">
           <h3 className="text-lg font-semibold mb-4">Crear Reserva Manual</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Buscador de usuarios */}
             <div>
@@ -288,7 +290,7 @@ export default function BookingsAdminPage() {
               />
               {userSearchTerm && (
                 <div className="mt-2 max-h-40 overflow-y-auto border rounded">
-                  {filteredUsers.map(user => (
+                  {filteredUsers.map((user) => (
                     <div
                       key={user.id}
                       onClick={() => {
@@ -321,7 +323,7 @@ export default function BookingsAdminPage() {
                 className="border rounded px-3 py-2 w-full"
               >
                 <option value="">Seleccionar horario</option>
-                {slots.map(slot => (
+                {slots.map((slot) => (
                   <option key={slot.start} value={slot.start}>
                     {slot.start} - {slot.end}
                   </option>
@@ -531,9 +533,7 @@ export default function BookingsAdminPage() {
 
       {/* Mensaje si no hay reservas */}
       {bookings.length === 0 && (
-        <div className="text-center text-gray-500 py-8">
-          No hay reservas para esta fecha
-        </div>
+        <div className="text-center text-gray-500 py-8">No hay reservas para esta fecha</div>
       )}
     </div>
   );

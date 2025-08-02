@@ -59,7 +59,7 @@ export default function Turnero() {
     const { data, error } = await supabase
       .from('bookings')
       .select(
-        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at',
+        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at, cancelled',
       )
       .eq('date', dateString);
 
@@ -93,7 +93,8 @@ export default function Turnero() {
       const [bh, bm] = b.start_time.split(':').map(Number);
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
-      const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+      const active =
+        (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
       return active && checkMinutes >= bStart && checkMinutes < bEnd;
     }).length;
 
@@ -110,7 +111,8 @@ export default function Turnero() {
         const [bh, bm] = b.start_time.split(':').map(Number);
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
-        const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+        const active =
+          (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       }).length;
 
@@ -142,7 +144,8 @@ export default function Turnero() {
     // Check overlapping bookings
     const takenCourts = bookings
       .filter((b) => {
-        const active = b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date());
+        const active =
+          (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
         if (!active) return false;
 
         const [bh, bm] = b.start_time.split(':').map(Number);
