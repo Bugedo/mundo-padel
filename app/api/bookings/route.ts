@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateAdminUser } from '@/lib/authUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +8,13 @@ const supabaseAdmin = createClient(
 );
 
 export async function GET(req: Request) {
+  // Add admin validation
+  const { isAdmin, error: authError } = await validateAdminUser();
+
+  if (!isAdmin) {
+    return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
 
@@ -28,17 +36,34 @@ export async function GET(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const body = await req.json();
-  const { id, field, value } = body;
+  try {
+    // Add admin validation
+    const { isAdmin, error: authError } = await validateAdminUser();
 
-  const { error } = await supabaseAdmin
-    .from('bookings')
-    .update({ [field]: value })
-    .eq('id', id);
+    if (!isAdmin) {
+      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const body = await req.json();
+    const { id, field, value } = body;
+
+    // Validate allowed fields for updates
+    const allowedFields = ['confirmed', 'present', 'cancelled'];
+    if (!allowedFields.includes(field)) {
+      return NextResponse.json({ error: 'Invalid field for update' }, { status: 400 });
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({ [field]: value })
+      .eq('id', id);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
   }
-
-  return NextResponse.json({ success: true });
 }
