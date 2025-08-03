@@ -268,7 +268,7 @@ export default function BookingsAdminPage() {
     return 'bg-orange-100';
   };
 
-  if (loading) return <div>Loading bookings...</div>;
+  if (loading) return <div>Cargando reservas...</div>;
 
   return (
     <div className="space-y-6">
@@ -277,7 +277,7 @@ export default function BookingsAdminPage() {
       {/* Navegación de fechas */}
       <div className="flex items-center gap-4 mb-4">
         <button onClick={() => changeDate(-1)} className="bg-muted px-3 py-1 rounded">
-          ← Previous day
+          ← Día anterior
         </button>
         <span className="font-semibold">
           {selectedDate.toLocaleDateString('es-ES', {
@@ -288,7 +288,7 @@ export default function BookingsAdminPage() {
           })}
         </span>
         <button onClick={() => changeDate(1)} className="bg-muted px-3 py-1 rounded">
-          Next day →
+          Día siguiente →
         </button>
       </div>
 

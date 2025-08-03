@@ -11,7 +11,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   if (loading) {
-    return <div className="p-8">Loading...</div>;
+    return <div className="p-8">Cargando...</div>;
   }
 
   if (!user) {
@@ -23,9 +23,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const navItems = [
-    { name: 'Users', href: '/admin/users' },
-    { name: 'Bookings', href: '/admin/bookings' },
-    { name: 'Recurring Bookings', href: '/admin/recurring-bookings' },
+    { name: 'Reservas', href: '/admin/bookings' },
+    { name: 'Reservas Recurrentes', href: '/admin/recurring-bookings' },
+    { name: 'Usuarios', href: '/admin/users' },
   ];
 
   return (

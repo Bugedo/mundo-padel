@@ -170,149 +170,139 @@ export default function UsersPage() {
   };
 
   if (loading) return <div>Cargando usuarios...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600 mb-4">Error: {error}</p>
+        <button
+          onClick={fetchUsers}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Usuarios</h1>
 
-      <div className="mb-4">
+      {/* Search */}
+      <div className="mb-6">
         <input
           type="text"
-          placeholder="Buscar por email o nombre..."
+          placeholder="Buscar usuarios por nombre o email..."
           value={searchTerm}
           onChange={(e) => handleSearch(e.target.value)}
-          className="border rounded px-3 py-2 w-full md:w-1/3"
+          className="border rounded px-3 py-2 w-full max-w-md"
         />
       </div>
 
-      <table className="w-full border border-gray-300 rounded">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2 text-left">Nombre Completo</th>
-            <th className="p-2 text-left">Email</th>
-            <th className="p-2 text-left">Teléfono</th>
-            <th className="p-2 text-left">Rol</th>
-            <th className="p-2 text-left">Fecha de Registro</th>
-            <th className="p-2 text-left">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredUsers.map((user) => (
-            <React.Fragment key={user.id}>
-              <tr className="border-t">
-                <td className="p-2">{user.full_name || '—'}</td>
-                <td className="p-2">{user.email}</td>
-                <td className="p-2">{user.phone || '—'}</td>
-                <td className="p-2">{user.role}</td>
-                <td className="p-2">{new Date(user.created_at).toLocaleDateString('es-ES')}</td>
-                <td className="p-2 flex gap-2">
-                  <button
-                    onClick={() => handleToggleBookings(user.id)}
-                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                  >
-                    {expandedUserId === user.id ? 'Ocultar Reservas' : 'Ver Reservas'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user.id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                  >
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-              {expandedUserId === user.id && (
-                <tr>
-                  <td colSpan={6} className="p-4 bg-gray-50">
-                    <div className="space-y-4">
-                      {/* Filter buttons */}
-                      <div className="flex gap-2 mb-4">
-                        <button
-                          onClick={() => handleBookingFilterChange(user.id, 'active')}
-                          className={`px-3 py-1 rounded text-sm ${
-                            bookingFilter === 'active'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          Reservas Activas
-                        </button>
-                        <button
-                          onClick={() => handleBookingFilterChange(user.id, 'past')}
-                          className={`px-3 py-1 rounded text-sm ${
-                            bookingFilter === 'past'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          Reservas Pasadas
-                        </button>
-                      </div>
+      {/* Users list */}
+      <div className="space-y-4">
+        {filteredUsers.map((user) => (
+          <div key={user.id} className="border rounded p-4">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">
+                  {user.full_name || 'Sin nombre'}
+                </h3>
+                <p className="text-gray-600">{user.email}</p>
+                {user.phone && <p className="text-gray-600">Tel: {user.phone}</p>}
+                <p className="text-sm text-gray-500">
+                  Rol: {user.role === 'admin' ? 'Administrador' : 'Usuario'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Registrado: {formatDate(user.created_at)}
+                </p>
+              </div>
 
-                      {/* Bookings list */}
-                      {userBookings[user.id] ? (
-                        userBookings[user.id].length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full border border-gray-200 rounded">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="p-2 text-left text-sm">Fecha</th>
-                                  <th className="p-2 text-left text-sm">Horario</th>
-                                  <th className="p-2 text-left text-sm">Cancha</th>
-                                  <th className="p-2 text-left text-sm">Duración</th>
-                                  <th className="p-2 text-left text-sm">Estado</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {userBookings[user.id].map((booking) => (
-                                  <tr key={booking.id} className="border-t">
-                                    <td className="p-2 text-sm">
-                                      {formatBookingDate(booking)}
-                                      {booking.is_recurring && booking.start_date && (
-                                        <div className="text-xs text-gray-500 mt-1">
-                                          Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
-                                          {booking.end_date && ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="p-2 text-sm">
-                                      {booking.start_time} - {booking.end_time}
-                                    </td>
-                                    <td className="p-2 text-sm">Cancha {booking.court}</td>
-                                    <td className="p-2 text-sm">{booking.duration_minutes} min</td>
-                                    <td className="p-2 text-sm">
-                                      <span className={`font-medium ${getStatusColor(booking)}`}>
-                                        {getBookingStatus(booking)}
-                                      </span>
-                                      {booking.is_recurring && (
-                                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">
-                                          Recurrente
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="text-center text-gray-500 py-4">
-                            No hay reservas {bookingFilter === 'active' ? 'activas' : 'pasadas'} para este usuario
-                          </div>
-                        )
-                      ) : (
-                        <div className="text-center text-gray-500 py-4">
-                          Cargando reservas...
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleToggleBookings(user.id)}
+                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  {expandedUserId === user.id ? 'Ocultar' : 'Ver'} Reservas
+                </button>
+                <button
+                  onClick={() => handleDelete(user.id)}
+                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+
+            {/* Expanded bookings section */}
+            {expandedUserId === user.id && (
+              <div className="mt-4 border-t pt-4">
+                <div className="flex gap-4 mb-4">
+                  <button
+                    onClick={() => handleBookingFilterChange(user.id, 'active')}
+                    className={`px-3 py-1 rounded ${
+                      bookingFilter === 'active'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    Reservas Activas
+                  </button>
+                  <button
+                    onClick={() => handleBookingFilterChange(user.id, 'past')}
+                    className={`px-3 py-1 rounded ${
+                      bookingFilter === 'past'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    Reservas Pasadas
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {userBookings[user.id]?.map((booking) => (
+                    <div key={booking.id} className="bg-gray-50 p-3 rounded">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">
+                            {formatBookingDate(booking)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {booking.start_time} - {booking.end_time} ({booking.duration_minutes} min)
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Cancha: {booking.court}
+                          </p>
                         </div>
-                      )}
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${getStatusColor(booking)}`}
+                        >
+                          {getBookingStatus(booking)}
+                        </span>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+                  ))}
+                  {userBookings[user.id]?.length === 0 && (
+                    <p className="text-gray-500 text-center py-4">
+                      No hay reservas {bookingFilter === 'active' ? 'activas' : 'pasadas'} para este usuario.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {filteredUsers.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">
+              {searchTerm ? 'No se encontraron usuarios que coincidan con la búsqueda.' : 'No hay usuarios registrados.'}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

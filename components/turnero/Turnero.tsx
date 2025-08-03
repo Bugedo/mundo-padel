@@ -248,7 +248,7 @@ export default function Turnero() {
             onClick={() => changeDate(-1)}
             className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
           >
-            ← Previous day
+            ← Día anterior
           </button>
           <span className="font-semibold">
             {selectedDate.toLocaleDateString('es-ES', {
@@ -262,7 +262,7 @@ export default function Turnero() {
             onClick={() => changeDate(1)}
             className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
           >
-            Next day →
+            Día siguiente →
           </button>
         </div>
 
@@ -296,7 +296,7 @@ export default function Turnero() {
           onClick={() => setShowEarly(!showEarly)}
           className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
         >
-          {showEarly ? 'Hide early' : 'Show early'}
+          {showEarly ? 'Ocultar temprano' : 'Mostrar temprano'}
         </button>
       </div>
 
@@ -343,7 +343,7 @@ export default function Turnero() {
             onClick={createBooking}
             className="bg-green-600 px-6 py-2 rounded text-white hover:bg-green-700"
           >
-            Confirm booking
+            Confirmar reserva
           </button>
         </div>
       )}
@@ -381,9 +381,9 @@ function BookingPending({ booking, onExpire }: { booking: any; onExpire: () => v
 
   return (
     <div className="mt-4 bg-yellow-100 p-4 rounded text-black text-center">
-      <p className="mb-2">To confirm your booking, contact us to pay the deposit.</p>
+      <p className="mb-2">Para confirmar tu reserva, contáctanos para pagar el depósito.</p>
       <p className="font-bold">
-        Time remaining: {minutes}:{seconds.toString().padStart(2, '0')}
+        Tiempo restante: {minutes}:{seconds.toString().padStart(2, '0')}
       </p>
     </div>
   );

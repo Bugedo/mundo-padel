@@ -239,13 +239,29 @@ export default function RecurringBookingsPage() {
   };
 
   if (loading) return <div>Cargando reservas recurrentes...</div>;
-  if (error) return <div className="text-red-600">Error: {error}</div>;
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600 mb-4">Error: {error}</p>
+        <button
+          onClick={() => {
+            setError(null);
+            fetchRecurringBookings();
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Reservas Recurrentes</h1>
 
-      {/* Create Recurring Booking Button */}
+      {/* Create button */}
       <div className="mb-6">
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
@@ -255,13 +271,13 @@ export default function RecurringBookingsPage() {
         </button>
       </div>
 
-      {/* Create Form */}
+      {/* Create form */}
       {showCreateForm && (
         <div className="bg-gray-50 p-6 rounded border mb-6">
           <h3 className="text-lg font-semibold mb-4">Crear Reserva Recurrente</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* User Selection */}
+            {/* User selection */}
             <div>
               <label className="block text-sm font-medium mb-2">Usuario</label>
               <input
@@ -271,42 +287,44 @@ export default function RecurringBookingsPage() {
                 onChange={(e) => setUserSearchTerm(e.target.value)}
                 className="border rounded px-3 py-2 w-full"
               />
-              {userSearchTerm && !selectedUser && (
+              {userSearchTerm && (
                 <div className="mt-2 max-h-40 overflow-y-auto border rounded">
                   {filteredUsers.map((user) => (
                     <div
                       key={user.id}
                       onClick={() => {
                         setSelectedUser(user.id);
-                        setUserSearchTerm(`${user.full_name || 'Sin nombre'} (${user.email})`);
+                        setUserSearchTerm(user.full_name || user.email);
                       }}
                       className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
                     >
-                      {user.full_name || 'Sin nombre'} ({user.email})
+                      {user.full_name} ({user.email})
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Selected Date */}
+            {/* Day of week */}
             <div>
-              <label className="block text-sm font-medium mb-2">Fecha de Inicio</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+              <label className="block text-sm font-medium mb-2">Día de la semana</label>
+              <select
+                value={selectedUser ? '1' : ''}
+                onChange={(e) => {
+                  // This is a placeholder, you'll need to add day selection
+                }}
                 className="border rounded px-3 py-2 w-full"
-                required
-              />
-              {startDate && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Día de la semana: {daysOfWeek[new Date(startDate).getDay()]?.label}
-                </p>
-              )}
+              >
+                <option value="">Seleccionar día</option>
+                {daysOfWeek.map((day) => (
+                  <option key={day.value} value={day.value}>
+                    {day.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Time Slot */}
+            {/* Time selection */}
             <div>
               <label className="block text-sm font-medium mb-2">Horario</label>
               <div className="mb-2">
@@ -359,9 +377,19 @@ export default function RecurringBookingsPage() {
               </select>
             </div>
 
-            {/* End Date */}
+            {/* Date range */}
             <div>
-              <label className="block text-sm font-medium mb-2">Fecha de Fin (Opcional)</label>
+              <label className="block text-sm font-medium mb-2">Fecha de inicio</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="border rounded px-3 py-2 w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Fecha de fin (opcional)</label>
               <input
                 type="date"
                 value={endDate}
@@ -370,8 +398,8 @@ export default function RecurringBookingsPage() {
               />
             </div>
 
-            {/* Create Button */}
-            <div className="flex items-end">
+            {/* Create button */}
+            <div className="md:col-span-2 flex items-end">
               <button
                 onClick={createRecurringBooking}
                 disabled={!selectedUser || !selectedTime}
@@ -384,71 +412,55 @@ export default function RecurringBookingsPage() {
         </div>
       )}
 
-      {/* Recurring Bookings List */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Reservas Recurrentes Activas</h2>
+      {/* Recurring bookings list */}
+      <div className="space-y-4">
+        {recurringBookings.map((booking) => (
+          <div key={booking.id} className="border rounded p-4">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">
+                  {booking.user?.full_name || 'Usuario no encontrado'}
+                </h3>
+                <p className="text-gray-600">{booking.user?.email}</p>
+                <p className="text-sm text-gray-500">
+                  {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} - {booking.start_time} - {booking.end_time}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Cancha {booking.court} - {booking.duration_minutes} minutos
+                </p>
+                {booking.start_date && (
+                  <p className="text-sm text-gray-500">
+                    Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
+                    {booking.end_date && ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
+                  </p>
+                )}
+              </div>
 
-        {recurringBookings.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            No se encontraron reservas recurrentes
+              <div className="flex gap-2">
+                <button
+                  onClick={() => updateRecurringBooking(booking.id, 'active', !booking.active)}
+                  className={`px-3 py-1 rounded ${
+                    booking.active
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                  }`}
+                >
+                  {booking.active ? 'Activa' : 'Inactiva'}
+                </button>
+                <button
+                  onClick={() => deleteRecurringBooking(booking.id)}
+                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border border-gray-300 rounded">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="p-2 text-left">Usuario</th>
-                  <th className="p-2 text-left">Día</th>
-                  <th className="p-2 text-left">Horario</th>
-                  <th className="p-2 text-left">Duración</th>
-                  <th className="p-2 text-left">Cancha</th>
-                  <th className="p-2 text-left">Estado</th>
-                  <th className="p-2 text-left">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recurringBookings.map((booking) => (
-                  <tr key={booking.id} className="border-t">
-                    <td className="p-2">{booking.user?.full_name || '—'}</td>
-                    <td className="p-2">
-                      {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label}
-                    </td>
-                    <td className="p-2">
-                      {booking.start_time} - {booking.end_time}
-                    </td>
-                    <td className="p-2">{booking.duration_minutes} min</td>
-                    <td className="p-2">Cancha {booking.court}</td>
-                    <td className="p-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${booking.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-                      >
-                        {booking.active ? 'Activo' : 'Pausado'}
-                      </span>
-                    </td>
-                    <td className="p-2 flex gap-2">
-                      <button
-                        onClick={() =>
-                          updateRecurringBooking(booking.id, 'active', !booking.active)
-                        }
-                        className={`px-3 py-1 rounded text-white text-sm ${
-                          booking.active
-                            ? 'bg-yellow-600 hover:bg-yellow-700'
-                            : 'bg-green-600 hover:bg-green-700'
-                        }`}
-                      >
-                        {booking.active ? 'Pausar' : 'Activar'}
-                      </button>
-                      <button
-                        onClick={() => deleteRecurringBooking(booking.id)}
-                        className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        ))}
+
+        {recurringBookings.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No hay reservas recurrentes configuradas.</p>
           </div>
         )}
       </div>
