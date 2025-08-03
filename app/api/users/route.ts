@@ -43,13 +43,54 @@ export async function GET(req: NextRequest) {
       }
       // If no filter, show all bookings
 
-      const { data, error } = await query.order('date', { ascending: true });
+      const { data: regularBookings, error } = await query.order('date', { ascending: true });
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json(data);
+      // Get recurring bookings for this user
+      const { data: recurringBookings, error: recurringError } = await supabaseAdmin
+        .from('recurring_bookings')
+        .select(
+          `
+          *,
+          user:profiles!recurring_bookings_user_id_fkey(full_name, email)
+        `,
+        )
+        .eq('user_id', userId)
+        .eq('active', true);
+
+      if (recurringError) {
+        console.error('Error fetching recurring bookings:', recurringError);
+      }
+
+      // Convert recurring bookings to regular booking format for display
+      const recurringBookingsFormatted =
+        recurringBookings?.map((recurring) => ({
+          id: `recurring-${recurring.id}`,
+          user_id: recurring.user_id,
+          date: null, // No specific date for recurring
+          start_time: recurring.start_time,
+          end_time: recurring.end_time,
+          duration_minutes: recurring.duration_minutes,
+          court: recurring.court,
+          confirmed: true,
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          recurring_booking_id: recurring.id,
+          day_of_week: recurring.day_of_week,
+          active: recurring.active,
+          start_date: recurring.start_date,
+          end_date: recurring.end_date,
+          user: recurring.user,
+        })) || [];
+
+      // Combine regular and recurring bookings
+      const allBookings = [...(regularBookings || []), ...recurringBookingsFormatted];
+
+      return NextResponse.json(allBookings);
     } else {
       // Get all users
       const { data, error } = await supabaseAdmin

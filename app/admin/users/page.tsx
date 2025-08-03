@@ -14,7 +14,7 @@ interface User {
 
 interface Booking {
   id: string;
-  date: string;
+  date: string | null;
   start_time: string;
   end_time: string;
   duration_minutes: number;
@@ -23,6 +23,10 @@ interface Booking {
   present: boolean;
   cancelled: boolean;
   is_recurring: boolean;
+  day_of_week?: number;
+  active?: boolean;
+  start_date?: string;
+  end_date?: string;
   user?: {
     full_name: string;
     email: string;
@@ -124,6 +128,7 @@ export default function UsersPage() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
@@ -132,7 +137,22 @@ export default function UsersPage() {
     });
   };
 
+  const getDayOfWeek = (dayNumber: number) => {
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    return days[dayNumber] || '';
+  };
+
+  const formatBookingDate = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return `Todos los ${getDayOfWeek(booking.day_of_week || 0)}`;
+    }
+    return formatDate(booking.date || '');
+  };
+
   const getBookingStatus = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return booking.active ? 'Activa' : 'Pausada';
+    }
     if (booking.cancelled) return 'Cancelada';
     if (booking.present) return 'Presente';
     if (booking.confirmed) return 'Confirmada';
@@ -140,6 +160,9 @@ export default function UsersPage() {
   };
 
   const getStatusColor = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return booking.active ? 'text-green-600' : 'text-gray-600';
+    }
     if (booking.cancelled) return 'text-red-600';
     if (booking.present) return 'text-green-600';
     if (booking.confirmed) return 'text-blue-600';
@@ -243,7 +266,15 @@ export default function UsersPage() {
                               <tbody>
                                 {userBookings[user.id].map((booking) => (
                                   <tr key={booking.id} className="border-t">
-                                    <td className="p-2 text-sm">{formatDate(booking.date)}</td>
+                                    <td className="p-2 text-sm">
+                                      {formatBookingDate(booking)}
+                                      {booking.is_recurring && booking.start_date && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
+                                          {booking.end_date && ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
+                                        </div>
+                                      )}
+                                    </td>
                                     <td className="p-2 text-sm">
                                       {booking.start_time} - {booking.end_time}
                                     </td>
@@ -255,7 +286,7 @@ export default function UsersPage() {
                                       </span>
                                       {booking.is_recurring && (
                                         <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">
-                                          R
+                                          Recurrente
                                         </span>
                                       )}
                                     </td>
