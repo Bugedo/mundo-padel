@@ -92,11 +92,18 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json(allBookings);
     } else {
-      // Get all users
-      const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Get all users or only admins based on query parameter
+      const { searchParams } = new URL(req.url);
+      const showAll = searchParams.get('showAll') === 'true';
+
+      let query = supabaseAdmin.from('profiles').select('*');
+
+      if (!showAll) {
+        // By default, only show admins
+        query = query.eq('role', 'admin');
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -149,7 +156,7 @@ export async function PATCH(req: Request) {
       .from('profiles')
       .update(safeUpdates)
       .eq('id', id)
-      .select('id, full_name, email, role, updated_at')
+      .select('id, full_name, email, phone, role')
       .single();
 
     if (updateError) {
