@@ -1,39 +1,75 @@
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
 
-const supabase = createServerClient(
+// Create admin client with service role key for database operations
+const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    cookies: {
-      getAll: () => [],
-      setAll: async () => {},
-    },
-  },
 );
 
-// GET
-export async function GET() {
-  // Add admin validation
-  const { isAdmin, error: authError } = await validateAdminUser();
+export async function GET(req: NextRequest) {
+  try {
+    const { isAdmin, error: authError } = await validateAdminUser();
+    if (!isAdmin) {
+      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
 
-  if (!isAdmin) {
-    return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
-  }
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId');
+    const filter = searchParams.get('filter'); // 'active' or 'past'
 
-  const { data, error: dbError } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, role, created_at');
+    if (userId) {
+      // Get bookings for specific user
+      let query = supabaseAdmin
+        .from('bookings')
+        .select(
+          `
+          *,
+          user:profiles!bookings_user_id_fkey(full_name, email)
+        `,
+        )
+        .eq('user_id', userId);
 
-  if (dbError) {
+      // Apply filter based on date
+      const today = new Date().toISOString().split('T')[0];
+
+      if (filter === 'active') {
+        // Show future bookings and today's bookings
+        query = query.gte('date', today);
+      } else if (filter === 'past') {
+        // Show past bookings
+        query = query.lt('date', today);
+      }
+      // If no filter, show all bookings
+
+      const { data, error } = await query.order('date', { ascending: true });
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json(data);
+    } else {
+      // Get all users
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json(data);
+    }
+  } catch (error) {
+    console.error('Users API error:', error);
     return NextResponse.json(
-      { error: 'Error fetching profiles: ' + dbError.message },
+      { error: 'Internal server error while fetching users' },
       { status: 500 },
     );
   }
-
-  return NextResponse.json(data ?? []);
 }
 
 // PATCH
@@ -68,7 +104,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 });
     }
 
-    const { data, error: updateError } = await supabase
+    const { data, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update(safeUpdates)
       .eq('id', id)
@@ -104,7 +140,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Missing id in request body.' }, { status: 400 });
     }
 
-    const { error: deleteError } = await supabase.from('profiles').delete().eq('id', id);
+    const { error: deleteError } = await supabaseAdmin.from('profiles').delete().eq('id', id);
 
     if (deleteError) {
       return NextResponse.json(
