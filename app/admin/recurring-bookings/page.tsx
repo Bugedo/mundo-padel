@@ -82,6 +82,7 @@ export default function RecurringBookingsPage() {
   // Form state for creating new recurring booking
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedUserInfo, setSelectedUserInfo] = useState<User | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedDuration, setSelectedDuration] = useState<60 | 90 | 120>(90);
   const [selectedCourt, setSelectedCourt] = useState<1 | 2 | 3>(1);
@@ -90,6 +91,7 @@ export default function RecurringBookingsPage() {
   const [showEarlySlots, setShowEarlySlots] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
@@ -108,6 +110,21 @@ export default function RecurringBookingsPage() {
     );
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.user-dropdown-container')) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const fetchRecurringBookings = async () => {
     setLoading(true);
@@ -156,6 +173,52 @@ export default function RecurringBookingsPage() {
 
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
+    // Check for conflicts with existing recurring bookings
+    const conflictingRecurring = recurringBookings.filter(
+      (booking) =>
+        booking.day_of_week === selectedDayOfWeek &&
+        booking.court === selectedCourt &&
+        booking.active &&
+        ((booking.start_time <= selectedTime && booking.end_time > selectedTime) ||
+          (booking.start_time < end_time && booking.end_time >= end_time) ||
+          (selectedTime <= booking.start_time && end_time >= booking.end_time)),
+    );
+
+    if (conflictingRecurring.length > 0) {
+      alert(
+        'Ya existe una reserva para este día, horario y cancha. Por favor selecciona otro horario o cancha.',
+      );
+      return;
+    }
+
+    // Check for conflicts with regular bookings on the start date
+    try {
+      const res = await fetch(`/api/bookings?date=${startDate}`, { cache: 'no-store' });
+      const regularBookings = await res.json();
+
+      if (res.ok) {
+        const conflictingRegular = regularBookings.filter(
+          (booking: any) =>
+            booking.court === selectedCourt &&
+            !booking.cancelled &&
+            (booking.confirmed ||
+              (booking.expires_at && new Date(booking.expires_at) > new Date())) &&
+            ((booking.start_time <= selectedTime && booking.end_time > selectedTime) ||
+              (booking.start_time < end_time && booking.end_time >= end_time) ||
+              (selectedTime <= booking.start_time && end_time >= booking.end_time)),
+        );
+
+        if (conflictingRegular.length > 0) {
+          alert(
+            'Ya existe una reserva regular para este día, horario y cancha. Por favor selecciona otro horario o cancha.',
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error checking regular bookings:', err);
+    }
+
     try {
       const res = await fetch('/api/recurring-bookings', {
         method: 'POST',
@@ -179,6 +242,7 @@ export default function RecurringBookingsPage() {
         // Reset form to default values
         setShowCreateForm(false);
         setSelectedUser('');
+        setSelectedUserInfo(null);
         setSelectedTime('');
         setStartDate('');
         setEndDate('');
@@ -186,6 +250,7 @@ export default function RecurringBookingsPage() {
         setSelectedDuration(90);
         setSelectedCourt(1);
         setShowEarlySlots(false);
+        setShowUserDropdown(false);
         fetchRecurringBookings();
       } else {
         alert(`Error al crear reserva recurrente: ${data.error}`);
@@ -278,50 +343,72 @@ export default function RecurringBookingsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* User selection */}
-            <div>
+            <div className="user-dropdown-container">
               <label className="block text-sm font-medium mb-2">Usuario</label>
-              <input
-                type="text"
-                placeholder="Buscar por nombre o email..."
-                value={userSearchTerm}
-                onChange={(e) => setUserSearchTerm(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
-              />
-              {userSearchTerm && (
-                <div className="mt-2 max-h-40 overflow-y-auto border rounded">
-                  {filteredUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      onClick={() => {
-                        setSelectedUser(user.id);
-                        setUserSearchTerm(user.full_name || user.email);
-                      }}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
-                    >
-                      {user.full_name} ({user.email})
-                    </div>
-                  ))}
+              {selectedUserInfo ? (
+                <div className="border rounded px-3 py-2 bg-gray-50">
+                  <p className="font-medium">{selectedUserInfo.full_name}</p>
+                  <p className="text-sm text-gray-600">{selectedUserInfo.email}</p>
+                  <button
+                    onClick={() => {
+                      setSelectedUser('');
+                      setSelectedUserInfo(null);
+                      setUserSearchTerm('');
+                    }}
+                    className="text-sm text-red-600 hover:text-red-800 mt-1"
+                  >
+                    Cambiar usuario
+                  </button>
                 </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o email..."
+                    value={userSearchTerm}
+                    onChange={(e) => {
+                      setUserSearchTerm(e.target.value);
+                      setShowUserDropdown(true);
+                    }}
+                    onFocus={() => setShowUserDropdown(true)}
+                    className="border rounded px-3 py-2 w-full"
+                  />
+                  {showUserDropdown && userSearchTerm && (
+                    <div className="mt-2 max-h-40 overflow-y-auto border rounded bg-white">
+                      {filteredUsers.map((user) => (
+                        <div
+                          key={user.id}
+                          onClick={() => {
+                            setSelectedUser(user.id);
+                            setSelectedUserInfo(user);
+                            setUserSearchTerm(user.full_name || user.email);
+                            setShowUserDropdown(false);
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                        >
+                          {user.full_name} ({user.email})
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Day of week */}
+            {/* Date range */}
             <div>
-              <label className="block text-sm font-medium mb-2">Día de la semana</label>
-              <select
-                value={selectedUser ? '1' : ''}
-                onChange={(e) => {
-                  // This is a placeholder, you'll need to add day selection
-                }}
+              <label className="block text-sm font-medium mb-2">Fecha de inicio</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="border rounded px-3 py-2 w-full"
-              >
-                <option value="">Seleccionar día</option>
-                {daysOfWeek.map((day) => (
-                  <option key={day.value} value={day.value}>
-                    {day.label}
-                  </option>
-                ))}
-              </select>
+              />
+              {startDate && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Día de la semana: {daysOfWeek[new Date(startDate).getDay()]?.label}
+                </p>
+              )}
             </div>
 
             {/* Time selection */}
@@ -377,17 +464,6 @@ export default function RecurringBookingsPage() {
               </select>
             </div>
 
-            {/* Date range */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Fecha de inicio</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
-              />
-            </div>
-
             <div>
               <label className="block text-sm font-medium mb-2">Fecha de fin (opcional)</label>
               <input
@@ -402,7 +478,7 @@ export default function RecurringBookingsPage() {
             <div className="md:col-span-2 flex items-end">
               <button
                 onClick={createRecurringBooking}
-                disabled={!selectedUser || !selectedTime}
+                disabled={!selectedUser || !selectedTime || !startDate}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
               >
                 Crear Reserva Recurrente
@@ -423,7 +499,8 @@ export default function RecurringBookingsPage() {
                 </h3>
                 <p className="text-gray-600">{booking.user?.email}</p>
                 <p className="text-sm text-gray-500">
-                  {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} - {booking.start_time} - {booking.end_time}
+                  {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} -{' '}
+                  {booking.start_time} - {booking.end_time}
                 </p>
                 <p className="text-sm text-gray-500">
                   Cancha {booking.court} - {booking.duration_minutes} minutos
@@ -431,7 +508,8 @@ export default function RecurringBookingsPage() {
                 {booking.start_date && (
                   <p className="text-sm text-gray-500">
                     Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
-                    {booking.end_date && ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
+                    {booking.end_date &&
+                      ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
                   </p>
                 )}
               </div>
