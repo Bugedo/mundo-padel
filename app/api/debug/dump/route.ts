@@ -40,6 +40,16 @@ export async function GET() {
       console.error('Error accessing bookings:', bookingsError);
     }
 
+    // Test recurring_bookings table
+    const { data: recurringData, error: recurringError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .limit(5);
+
+    if (recurringError) {
+      console.error('Error accessing recurring_bookings:', recurringError);
+    }
+
     // Return what we can access
     const databaseDump: any = {
       profiles: {
@@ -55,6 +65,15 @@ export async function GET() {
         structure: 'Available',
         data: bookingsData || [],
         rowCount: bookingsData?.length || 0,
+        hasError: false,
+      };
+    }
+
+    if (!recurringError) {
+      databaseDump.recurring_bookings = {
+        structure: 'Available',
+        data: recurringData || [],
+        rowCount: recurringData?.length || 0,
         hasError: false,
       };
     }

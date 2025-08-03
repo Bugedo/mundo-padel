@@ -59,15 +59,52 @@ export default function Turnero() {
     const { data, error } = await supabase
       .from('bookings')
       .select(
-        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at, cancelled',
+        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at, cancelled, is_recurring',
       )
       .eq('date', dateString);
 
     if (!error && data) setBookings(data);
   };
 
+  // Fetch recurring bookings for the selected date
+  const fetchRecurringBookings = async () => {
+    const dateString = formatDate(selectedDate);
+    const selectedDateObj = new Date(selectedDate);
+    const dayOfWeek = selectedDateObj.getDay(); // 0-6 (Sunday-Saturday)
+
+    const { data, error } = await supabase
+      .from('recurring_bookings')
+      .select('*')
+      .eq('day_of_week', dayOfWeek)
+      .eq('active', true);
+
+    if (!error && data) {
+      // Convert recurring bookings to regular bookings for the selected date
+      const recurringBookingsForDate = data.map((recurring) => ({
+        id: `recurring-${recurring.id}`,
+        user_id: recurring.user_id,
+        court: recurring.court,
+        date: dateString,
+        start_time: recurring.start_time,
+        end_time: recurring.end_time,
+        duration_minutes: recurring.duration_minutes,
+        confirmed: true, // Recurring bookings are always confirmed
+        expires_at: null,
+        cancelled: false,
+        is_recurring: true, // Flag to identify recurring bookings
+      }));
+
+      // Combine regular and recurring bookings
+      setBookings((prevBookings) => {
+        const regularBookings = prevBookings.filter((b) => !b.is_recurring);
+        return [...regularBookings, ...recurringBookingsForDate];
+      });
+    }
+  };
+
   useEffect(() => {
     fetchBookings();
+    fetchRecurringBookings();
   }, [selectedDate]);
 
   const changeDate = (offset: number) => {
@@ -215,8 +252,9 @@ export default function Turnero() {
             ← Previous day
           </button>
           <span className="font-semibold">
-            {selectedDate.toLocaleDateString('en-US', {
+            {selectedDate.toLocaleDateString('es-ES', {
               weekday: 'long',
+              year: 'numeric',
               month: 'long',
               day: 'numeric',
             })}

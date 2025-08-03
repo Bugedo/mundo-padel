@@ -25,6 +25,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const navItems = [
     { name: 'Users', href: '/admin/users' },
     { name: 'Bookings', href: '/admin/bookings' },
+    { name: 'Recurring Bookings', href: '/admin/recurring-bookings' },
   ];
 
   return (

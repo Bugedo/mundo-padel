@@ -251,8 +251,9 @@ export default function BookingsAdminPage() {
           ← Previous day
         </button>
         <span className="font-semibold">
-          {selectedDate.toLocaleDateString('en-US', {
+          {selectedDate.toLocaleDateString('es-ES', {
             weekday: 'long',
+            year: 'numeric',
             month: 'long',
             day: 'numeric',
           })}
@@ -367,10 +368,11 @@ export default function BookingsAdminPage() {
             <thead className="bg-orange-50">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
-                <th className="p-2 text-left">Pista</th>
+                <th className="p-2 text-left">Fecha</th>
                 <th className="p-2 text-left">Horario</th>
                 <th className="p-2 text-left">Duración</th>
-                <th className="p-2 text-left">Timer</th>
+                <th className="p-2 text-left">Cancha</th>
+                <th className="p-2 text-left">Estado</th>
                 <th className="p-2 text-left">Acciones</th>
               </tr>
             </thead>
@@ -383,11 +385,12 @@ export default function BookingsAdminPage() {
                 return (
                   <tr key={b.id} className="border-t">
                     <td className="p-2">{b.user?.full_name || '—'}</td>
-                    <td className="p-2">{b.court || '—'}</td>
+                    <td className="p-2">{b.date}</td>
                     <td className="p-2">
                       {b.start_time} - {b.end_time}
                     </td>
                     <td className="p-2">{b.duration_minutes} min</td>
+                    <td className="p-2">{b.court || '—'}</td>
                     <td className="p-2">
                       {remaining > 0 ? (
                         <span className={remaining < 60 ? 'text-red-600 font-bold' : ''}>
@@ -427,9 +430,10 @@ export default function BookingsAdminPage() {
             <thead className="bg-blue-50">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
-                <th className="p-2 text-left">Pista</th>
+                <th className="p-2 text-left">Fecha</th>
                 <th className="p-2 text-left">Horario</th>
                 <th className="p-2 text-left">Duración</th>
+                <th className="p-2 text-left">Cancha</th>
                 <th className="p-2 text-left">Acciones</th>
               </tr>
             </thead>
@@ -437,11 +441,12 @@ export default function BookingsAdminPage() {
               {confirmedBookings.map((b) => (
                 <tr key={b.id} className="border-t">
                   <td className="p-2">{b.user?.full_name || '—'}</td>
-                  <td className="p-2">{b.court || '—'}</td>
+                  <td className="p-2">{b.date}</td>
                   <td className="p-2">
                     {b.start_time} - {b.end_time}
                   </td>
                   <td className="p-2">{b.duration_minutes} min</td>
+                  <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2 flex gap-2">
                     <button
                       onClick={() => updateBooking(b.id, 'present', true)}
@@ -473,9 +478,10 @@ export default function BookingsAdminPage() {
             <thead className="bg-green-50">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
-                <th className="p-2 text-left">Pista</th>
+                <th className="p-2 text-left">Fecha</th>
                 <th className="p-2 text-left">Horario</th>
                 <th className="p-2 text-left">Duración</th>
+                <th className="p-2 text-left">Cancha</th>
                 <th className="p-2 text-left">Estado</th>
               </tr>
             </thead>
@@ -483,11 +489,12 @@ export default function BookingsAdminPage() {
               {finishedBookings.map((b) => (
                 <tr key={b.id} className="border-t">
                   <td className="p-2">{b.user?.full_name || '—'}</td>
-                  <td className="p-2">{b.court || '—'}</td>
+                  <td className="p-2">{b.date}</td>
                   <td className="p-2">
                     {b.start_time} - {b.end_time}
                   </td>
                   <td className="p-2">{b.duration_minutes} min</td>
+                  <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
                     <span className="text-green-600 font-semibold">Presente</span>
                   </td>
@@ -506,9 +513,10 @@ export default function BookingsAdminPage() {
             <thead className="bg-red-50">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
-                <th className="p-2 text-left">Pista</th>
+                <th className="p-2 text-left">Fecha</th>
                 <th className="p-2 text-left">Horario</th>
                 <th className="p-2 text-left">Duración</th>
+                <th className="p-2 text-left">Cancha</th>
                 <th className="p-2 text-left">Estado</th>
               </tr>
             </thead>
@@ -516,11 +524,12 @@ export default function BookingsAdminPage() {
               {cancelledBookings.map((b) => (
                 <tr key={b.id} className="border-t">
                   <td className="p-2">{b.user?.full_name || '—'}</td>
-                  <td className="p-2">{b.court || '—'}</td>
+                  <td className="p-2">{b.date}</td>
                   <td className="p-2">
                     {b.start_time} - {b.end_time}
                   </td>
                   <td className="p-2">{b.duration_minutes} min</td>
+                  <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
                     <span className="text-red-600 font-semibold">Cancelada</span>
                   </td>
