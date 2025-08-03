@@ -14,6 +14,8 @@ interface Booking {
   present: boolean;
   cancelled: boolean;
   expires_at?: string;
+  is_recurring?: boolean;
+  recurring_booking_id?: string;
   user?: {
     full_name: string;
   };
@@ -239,6 +241,36 @@ export default function BookingsAdminPage() {
 
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
+  const getBookingStatus = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return 'Recurrente';
+    }
+    if (booking.cancelled) return 'Cancelada';
+    if (booking.present) return 'Presente';
+    if (booking.confirmed) return 'Confirmada';
+    return 'Pendiente';
+  };
+
+  const getStatusColor = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return 'text-blue-600';
+    }
+    if (booking.cancelled) return 'text-red-600';
+    if (booking.present) return 'text-green-600';
+    if (booking.confirmed) return 'text-blue-600';
+    return 'text-orange-600';
+  };
+
+  const getStatusBgColor = (booking: Booking) => {
+    if (booking.is_recurring) {
+      return 'bg-blue-100';
+    }
+    if (booking.cancelled) return 'bg-red-100';
+    if (booking.present) return 'bg-green-100';
+    if (booking.confirmed) return 'bg-blue-100';
+    return 'bg-orange-100';
+  };
+
   if (loading) return <div>Loading bookings...</div>;
 
   return (
@@ -434,6 +466,7 @@ export default function BookingsAdminPage() {
                 <th className="p-2 text-left">Horario</th>
                 <th className="p-2 text-left">Duración</th>
                 <th className="p-2 text-left">Cancha</th>
+                <th className="p-2 text-left">Estado</th>
                 <th className="p-2 text-left">Acciones</th>
               </tr>
             </thead>
@@ -447,21 +480,33 @@ export default function BookingsAdminPage() {
                   </td>
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
+                  <td className="p-2">
+                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                      {getBookingStatus(b)}
+                    </span>
+                  </td>
                   <td className="p-2 flex gap-2">
-                    <button
-                      onClick={() => updateBooking(b.id, 'present', true)}
-                      className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                    >
-                      Presente
-                    </button>
-                    <button
-                      onClick={() => {
-                        updateBooking(b.id, 'cancelled', true);
-                      }}
-                      className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                    >
-                      Ausente
-                    </button>
+                    {!b.is_recurring && (
+                      <>
+                        <button
+                          onClick={() => updateBooking(b.id, 'present', true)}
+                          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                        >
+                          Presente
+                        </button>
+                        <button
+                          onClick={() => {
+                            updateBooking(b.id, 'cancelled', true);
+                          }}
+                          className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                        >
+                          Ausente
+                        </button>
+                      </>
+                    )}
+                    {b.is_recurring && (
+                      <span className="text-gray-500 text-sm">Sin acciones disponibles</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -496,7 +541,9 @@ export default function BookingsAdminPage() {
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
-                    <span className="text-green-600 font-semibold">Presente</span>
+                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                      {getBookingStatus(b)}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -531,7 +578,9 @@ export default function BookingsAdminPage() {
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
-                    <span className="text-red-600 font-semibold">Cancelada</span>
+                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                      {getBookingStatus(b)}
+                    </span>
                   </td>
                 </tr>
               ))}
