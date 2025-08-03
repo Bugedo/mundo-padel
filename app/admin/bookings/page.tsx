@@ -204,9 +204,7 @@ export default function BookingsAdminPage() {
       return;
     }
 
-    const takenCourts = conflictingBookings.map((b) => b.court);
-    const availableCourt = [1, 2, 3].find((c) => !takenCourts.includes(c));
-
+    // API will automatically assign the first available court
     const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -216,7 +214,6 @@ export default function BookingsAdminPage() {
         start_time: selectedTime,
         end_time,
         duration_minutes: selectedDuration,
-        court: availableCourt,
         confirmed: true, // Crear directamente confirmada
       }),
     });
@@ -481,7 +478,9 @@ export default function BookingsAdminPage() {
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
-                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}
+                    >
                       {getBookingStatus(b)}
                     </span>
                   </td>
@@ -541,7 +540,9 @@ export default function BookingsAdminPage() {
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
-                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}
+                    >
                       {getBookingStatus(b)}
                     </span>
                   </td>
@@ -578,7 +579,9 @@ export default function BookingsAdminPage() {
                   <td className="p-2">{b.duration_minutes} min</td>
                   <td className="p-2">{b.court || '—'}</td>
                   <td className="p-2">
-                    <span className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${getStatusBgColor(b)} ${getStatusColor(b)}`}
+                    >
                       {getBookingStatus(b)}
                     </span>
                   </td>

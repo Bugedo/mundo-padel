@@ -56,14 +56,18 @@ export default function Turnero() {
 
   const fetchBookings = async () => {
     const dateString = formatDate(selectedDate);
-    const { data, error } = await supabase
-      .from('bookings')
-      .select(
-        'id, user_id, court, date, start_time, end_time, duration_minutes, confirmed, expires_at, cancelled, is_recurring',
-      )
-      .eq('date', dateString);
 
-    if (!error && data) setBookings(data);
+    // Use admin client to see all bookings including pending ones
+    const response = await fetch(`/api/bookings?date=${dateString}`, {
+      cache: 'no-store',
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setBookings(data);
+    } else {
+      console.error('Error fetching bookings:', response.status);
+    }
   };
 
   // Fetch recurring bookings for the selected date
@@ -94,7 +98,7 @@ export default function Turnero() {
         is_recurring: true, // Flag to identify recurring bookings
       }));
 
-      // Combine regular and recurring bookings
+      // Add recurring bookings to existing bookings
       setBookings((prevBookings) => {
         const regularBookings = prevBookings.filter((b) => !b.is_recurring);
         return [...regularBookings, ...recurringBookingsForDate];
@@ -103,8 +107,12 @@ export default function Turnero() {
   };
 
   useEffect(() => {
-    fetchBookings();
-    fetchRecurringBookings();
+    const loadBookings = async () => {
+      await fetchBookings();
+      await fetchRecurringBookings();
+    };
+
+    loadBookings();
   }, [selectedDate]);
 
   const changeDate = (offset: number) => {
@@ -126,16 +134,22 @@ export default function Turnero() {
     const [th, tm] = time.split(':').map(Number);
     const checkMinutes = th * 60 + tm;
 
-    const count = bookings.filter((b) => {
+    // Get all active bookings that overlap with this time
+    const overlappingBookings = bookings.filter((b) => {
       const [bh, bm] = b.start_time.split(':').map(Number);
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
       const active =
         (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
       return active && checkMinutes >= bStart && checkMinutes < bEnd;
-    }).length;
+    });
 
-    return count >= 3;
+    // Count unique courts that are occupied
+    const occupiedCourts = new Set(
+      overlappingBookings.map((b) => b.court).filter((court) => court !== null),
+    );
+
+    return occupiedCourts.size >= 3;
   };
 
   const canFitDuration = (start_time: string, dur: number) => {
@@ -144,19 +158,38 @@ export default function Turnero() {
     const endMinutes = startMinutes + dur;
 
     for (let minute = startMinutes; minute < endMinutes; minute += 30) {
-      const count = bookings.filter((b) => {
+      // Get all active bookings that overlap with this minute
+      const overlappingBookings = bookings.filter((b) => {
         const [bh, bm] = b.start_time.split(':').map(Number);
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
         const active =
           (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
-      }).length;
+      });
 
-      if (count >= 3) return false;
+      // Count unique courts that are occupied
+      const occupiedCourts = new Set(
+        overlappingBookings.map((b) => b.court).filter((court) => court !== null),
+      );
+
+      if (occupiedCourts.size >= 3) return false;
     }
 
     return true;
+  };
+
+  const isHighlighted = (time: string) => {
+    const ref = selectedSlot || hoverSlot;
+    if (!ref) return false;
+    if (!canFitDuration(ref, duration)) return false;
+
+    const [h, m] = time.split(':').map(Number);
+    const [rh, rm] = ref.split(':').map(Number);
+    const slotMinutes = h * 60 + m;
+    const refMinutes = rh * 60 + rm;
+
+    return slotMinutes >= refMinutes && slotMinutes < refMinutes + duration;
   };
 
   // This version checks overlapping ranges for court assignment
@@ -178,66 +211,32 @@ export default function Turnero() {
     const start_time = selectedSlot;
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
-    // Check overlapping bookings
-    const takenCourts = bookings
-      .filter((b) => {
-        const active =
-          (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
-        if (!active) return false;
-
-        const [bh, bm] = b.start_time.split(':').map(Number);
-        const bStart = bh * 60 + bm;
-        const [eh, em] = b.end_time.split(':').map(Number);
-        const bEnd = eh * 60 + em;
-
-        // Overlap check
-        return startMinutes < bEnd && endMinutes > bStart;
-      })
-      .map((b) => b.court);
-
-    const availableCourt = [1, 2, 3].find((c) => !takenCourts.includes(c));
-
-    if (!availableCourt) {
-      alert('All courts are occupied in this slot');
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert({
+    // Use the API endpoint to create booking with automatic court assignment
+    const response = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         user_id: user.id,
-        created_by: user.id,
-        court: availableCourt,
         date: dateString,
         start_time,
         end_time,
         duration_minutes: duration,
         confirmed: false,
-        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (!error && data) {
+    if (response.ok) {
+      const data = await response.json();
       setPendingBooking(data);
       fetchBookings();
       setSelectedSlot(null);
     } else {
-      console.error('Insert error:', error);
+      const errorData = await response.json();
+      console.error('Booking creation error:', errorData);
+      alert(`Error creating booking: ${errorData.error}`);
     }
-  };
-
-  const isHighlighted = (time: string) => {
-    const ref = selectedSlot || hoverSlot;
-    if (!ref) return false;
-    if (!canFitDuration(ref, duration)) return false;
-
-    const [h, m] = time.split(':').map(Number);
-    const [rh, rm] = ref.split(':').map(Number);
-    const slotMinutes = h * 60 + m;
-    const refMinutes = rh * 60 + rm;
-
-    return slotMinutes >= refMinutes && slotMinutes < refMinutes + duration;
   };
 
   return (
