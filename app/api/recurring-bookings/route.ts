@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
 
+// Helper function to get day name
+function getDayName(dayNumber: number): string {
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return days[dayNumber] || '';
+}
+
 // Create admin client with service role key for database operations
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,13 +50,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    // Validate that only admin users can create recurring bookings
     const { isAdmin, error: authError } = await validateAdminUser();
-
     if (!isAdmin) {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
     }
-
     const body = await req.json();
     const {
       user_id,
@@ -62,31 +65,15 @@ export async function POST(req: Request) {
       start_date,
       end_date,
     } = body;
-
-    // Validate required fields
-    if (
-      !user_id ||
-      court === undefined ||
-      day_of_week === undefined ||
-      !start_time ||
-      !end_time ||
-      !duration_minutes
-    ) {
+    if (!user_id || court === undefined || day_of_week === undefined || !start_time || !end_time || !duration_minutes) {
       return NextResponse.json(
-        {
-          error:
-            'Missing required fields: user_id, court, day_of_week, start_time, end_time, duration_minutes',
-        },
+        { error: 'Missing required fields: user_id, court, day_of_week, start_time, end_time, duration_minutes' },
         { status: 400 },
       );
     }
-
-    // Validate day_of_week (0-6, where 0 is Sunday)
     if (day_of_week < 0 || day_of_week > 6) {
       return NextResponse.json({ error: 'day_of_week must be between 0 and 6' }, { status: 400 });
     }
-
-    // Validate court (1-3)
     if (court < 1 || court > 3) {
       return NextResponse.json({ error: 'court must be between 1 and 3' }, { status: 400 });
     }
@@ -97,9 +84,94 @@ export async function POST(req: Request) {
       .select('id')
       .eq('id', user_id)
       .single();
-
     if (userError || !user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Check for conflicts with existing recurring bookings
+    const { data: existingRecurringBookings, error: recurringError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .eq('day_of_week', day_of_week)
+      .eq('court', court)
+      .eq('active', true);
+
+    if (recurringError) {
+      return NextResponse.json({ error: recurringError.message }, { status: 500 });
+    }
+
+    // Check for time conflicts with existing recurring bookings
+    const [startH, startM] = start_time.split(':').map(Number);
+    const [endH, endM] = end_time.split(':').map(Number);
+    const newStartMinutes = startH * 60 + startM;
+    const newEndMinutes = endH * 60 + endM;
+
+    for (const existing of existingRecurringBookings || []) {
+      const [existingStartH, existingStartM] = existing.start_time.split(':').map(Number);
+      const [existingEndH, existingEndM] = existing.end_time.split(':').map(Number);
+      const existingStartMinutes = existingStartH * 60 + existingStartM;
+      const existingEndMinutes = existingEndH * 60 + existingEndM;
+
+      // Check for overlap
+      if (
+        (newStartMinutes < existingEndMinutes && newEndMinutes > existingStartMinutes) ||
+        (existingStartMinutes < newEndMinutes && existingEndMinutes > newStartMinutes)
+      ) {
+        return NextResponse.json({ 
+          error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${getDayName(day_of_week)})` 
+        }, { status: 409 });
+      }
+    }
+
+    // Check for conflicts with regular bookings in the next 6 weeks
+    const today = new Date();
+    const conflicts: Array<{ date: string; time: string; user: string }> = [];
+
+    for (let i = 0; i <= 42; i++) { // Check next 6 weeks
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() + i);
+      const checkDateString = checkDate.toISOString().split('T')[0];
+      const checkDayOfWeek = checkDate.getDay();
+
+      if (checkDayOfWeek === day_of_week) {
+        // Check if there are regular bookings on this date that conflict
+        const { data: regularBookings, error: regularError } = await supabaseAdmin
+          .from('bookings')
+          .select('*')
+          .eq('date', checkDateString)
+          .eq('court', court)
+          .neq('cancelled', true);
+
+        if (regularError) {
+          return NextResponse.json({ error: regularError.message }, { status: 500 });
+        }
+
+        for (const booking of regularBookings || []) {
+          const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
+          const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
+          const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
+          const bookingEndMinutes = bookingEndH * 60 + bookingEndM;
+
+          // Check for overlap
+          if (
+            (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
+            (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
+          ) {
+            conflicts.push({
+              date: checkDateString,
+              time: `${booking.start_time} - ${booking.end_time}`,
+              user: booking.user_id
+            });
+          }
+        }
+      }
+    }
+
+    if (conflicts.length > 0) {
+      const conflictDetails = conflicts.slice(0, 3).map(c => `${c.date} (${c.time})`).join(', ');
+      return NextResponse.json({ 
+        error: `Recurring booking conflicts with existing bookings: ${conflictDetails}${conflicts.length > 3 ? ' and more...' : ''}` 
+      }, { status: 409 });
     }
 
     // Create the recurring booking
