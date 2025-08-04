@@ -16,19 +16,19 @@ export default function Header() {
 
   if (loading) {
     return (
-      <header className="bg-background shadow-md">
+      <header className="bg-surface shadow-md border-b border-muted">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <span className="text-xl font-bold text-accent">Cargando...</span>
+          <span className="text-xl font-bold text-neutral">Cargando...</span>
         </div>
       </header>
     );
   }
 
   return (
-    <header className="bg-background shadow-md">
+    <header className="bg-surface shadow-md border-b border-muted">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         {/* Logo */}
-        <Link href="/" className="text-2xl font-bold text-accent">
+        <Link href="/" className="text-2xl font-bold text-neutral">
           Mundo Pádel
         </Link>
 
@@ -53,7 +53,7 @@ export default function Header() {
 
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-background border border-muted rounded shadow z-10">
-                  <div className="px-4 py-2 border-b border-muted text-white text-sm">
+                  <div className="px-4 py-2 border-b border-muted text-neutral text-sm">
                     {user.email}
                   </div>
                   <div className="px-4 py-2">

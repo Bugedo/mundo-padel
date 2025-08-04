@@ -246,7 +246,7 @@ export default function Turnero() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => changeDate(-1)}
-            className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
+            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
           >
             ← Día anterior
           </button>
@@ -260,7 +260,7 @@ export default function Turnero() {
           </span>
           <button
             onClick={() => changeDate(1)}
-            className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
+            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
           >
             Día siguiente →
           </button>
@@ -274,7 +274,7 @@ export default function Turnero() {
             {duration} min
           </button>
           {showDurations && (
-            <div className="absolute mt-2 bg-muted rounded shadow-lg flex flex-col">
+            <div className="absolute mt-2 bg-surface rounded shadow-lg flex flex-col border border-muted">
               {[60, 90, 120].map((d) => (
                 <button
                   key={d}
@@ -283,7 +283,7 @@ export default function Turnero() {
                     setShowDurations(false);
                     setSelectedSlot(null);
                   }}
-                  className={`px-4 py-2 hover:bg-muted/70 ${d === duration ? 'bg-accent text-background' : 'text-primary'}`}
+                  className={`px-4 py-2 hover:bg-accent ${d === duration ? 'bg-primary text-light' : 'text-neutral'}`}
                 >
                   {d} min
                 </button>
@@ -294,7 +294,7 @@ export default function Turnero() {
 
         <button
           onClick={() => setShowEarly(!showEarly)}
-          className="bg-muted px-3 py-1 rounded hover:bg-muted/70"
+          className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
         >
           {showEarly ? 'Ocultar temprano' : 'Mostrar temprano'}
         </button>

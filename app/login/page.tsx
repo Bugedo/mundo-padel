@@ -94,18 +94,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-50">
+    <div className="flex justify-center items-center min-h-screen bg-background">
       <form
         onSubmit={handleSubmit}
-        className="bg-white shadow rounded p-6 w-full max-w-sm space-y-4"
+        className="bg-surface shadow rounded p-6 w-full max-w-sm space-y-4 border border-muted"
       >
-        <h1 className="text-2xl font-bold text-center">
+        <h1 className="text-2xl font-bold text-center text-neutral">
           {isRegister ? 'Registrarse' : 'Iniciar Sesión'}
         </h1>
 
         {isRegister && (
           <div>
-            <label className="block mb-1 flex items-center gap-2">
+            <label className="block mb-1 flex items-center gap-2 text-neutral">
               <User size={16} />
               Nombre Completo *
             </label>
@@ -114,14 +114,14 @@ export default function LoginPage() {
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
               placeholder="Juan Pérez"
             />
           </div>
         )}
 
         <div>
-          <label className="block mb-1 flex items-center gap-2">
+          <label className="block mb-1 flex items-center gap-2 text-neutral">
             <Mail size={16} />
             Email *
           </label>
@@ -130,14 +130,14 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
             placeholder="juan@ejemplo.com"
           />
         </div>
 
         {isRegister && (
           <div>
-            <label className="block mb-1 flex items-center gap-2">
+            <label className="block mb-1 flex items-center gap-2 text-neutral">
               <Phone size={16} />
               Teléfono *
             </label>
@@ -145,7 +145,7 @@ export default function LoginPage() {
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
-                className="border rounded px-2 py-2 text-sm"
+                className="border border-muted rounded px-2 py-2 text-sm bg-surface text-neutral"
               >
                 <option value="+54">🇦🇷 +54</option>
                 <option value="+1">🇺🇸 +1</option>
@@ -162,7 +162,7 @@ export default function LoginPage() {
                 value={phone}
                 onChange={handlePhoneChange}
                 onFocus={handlePhoneFocus}
-                className="flex-1 border rounded px-3 py-2"
+                className="flex-1 border border-muted rounded px-3 py-2 bg-surface text-neutral"
                 placeholder="351 1234-5678"
               />
             </div>
@@ -170,28 +170,28 @@ export default function LoginPage() {
         )}
 
         <div>
-          <label className="block mb-1">Contraseña *</label>
+          <label className="block mb-1 text-neutral">Contraseña *</label>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
             placeholder={isRegister ? 'Mínimo 6 caracteres' : 'Tu contraseña'}
           />
           {isRegister && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-neutral mt-1">
               La contraseña debe tener al menos 6 caracteres
             </p>
           )}
         </div>
 
-        {message && <p className="text-center text-sm text-gray-600">{message}</p>}
+        {message && <p className="text-center text-sm text-neutral">{message}</p>}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="w-full bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:opacity-50"
         >
           {loading
             ? isRegister
@@ -202,7 +202,7 @@ export default function LoginPage() {
               : 'Iniciar Sesión'}
         </button>
 
-        <p className="text-center text-sm">
+        <p className="text-center text-sm text-neutral">
           {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
           <button
             type="button"
@@ -212,7 +212,7 @@ export default function LoginPage() {
               setFullName('');
               setPhone('');
             }}
-            className="text-blue-600 hover:underline"
+            className="text-primary hover:underline"
           >
             {isRegister ? 'Iniciar Sesión' : 'Registrarse'}
           </button>
@@ -222,20 +222,20 @@ export default function LoginPage() {
       {/* Verification Modal */}
       {showVerificationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+          <div className="bg-surface rounded-lg p-6 max-w-md mx-4 border border-muted">
             <div className="text-center">
-              <UserCheck size={48} className="mx-auto text-green-600 mb-4" />
-              <h2 className="text-xl font-bold mb-2">¡Cuenta creada exitosamente!</h2>
-              <p className="text-gray-600 mb-4">
+              <UserCheck size={48} className="mx-auto text-success mb-4" />
+              <h2 className="text-xl font-bold mb-2 text-neutral">¡Cuenta creada exitosamente!</h2>
+              <p className="text-neutral mb-4">
                 Te hemos enviado un email de verificación a <strong>{email}</strong>
               </p>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-neutral mb-6">
                 Por favor revisa tu bandeja de entrada y haz clic en el enlace de verificación para
                 activar tu cuenta.
               </p>
               <button
                 onClick={handleCloseVerificationModal}
-                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+                className="bg-success text-light px-6 py-2 rounded hover:bg-success/80"
               >
                 Entendido
               </button>

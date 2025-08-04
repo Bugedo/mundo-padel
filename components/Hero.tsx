@@ -22,10 +22,10 @@ export default function Hero() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8 }}
         >
-          <h1 className="text-4xl md:text-5xl font-bold text-accent">
+          <h1 className="text-4xl md:text-5xl font-bold text-neutral">
             Reservá tu turno en Mundo Pádel
           </h1>
-          <p className="text-lg text-muted">
+          <p className="text-lg text-neutral">
             Elegí el horario que más te convenga y asegurá tu cancha fácil y rápido.
           </p>
         </motion.div>
@@ -38,7 +38,7 @@ export default function Hero() {
         >
           <button
             onClick={handleScrollToTurnero}
-            className="bg-accent text-background px-8 py-4 text-lg rounded-lg font-semibold hover:bg-accent-hover transition"
+            className="bg-primary text-light px-8 py-4 text-lg rounded-lg font-semibold hover:bg-primary-hover transition"
           >
             Reservar ahora
           </button>
