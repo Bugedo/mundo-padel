@@ -348,7 +348,7 @@ export default function RecurringBookingsPage() {
               {selectedUserInfo ? (
                 <div className="border border-muted rounded px-3 py-2 bg-surface">
                   <p className="font-medium text-neutral">{selectedUserInfo.full_name}</p>
-                  <p className="text-sm text-muted">{selectedUserInfo.email}</p>
+                  <p className="text-sm text-neutral">{selectedUserInfo.email}</p>
                   <button
                     onClick={() => {
                       setSelectedUser('');
@@ -405,7 +405,7 @@ export default function RecurringBookingsPage() {
                 className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
               {startDate && (
-                <p className="text-sm text-muted mt-1">
+                <p className="text-sm text-neutral mt-1">
                   Día de la semana: {daysOfWeek[new Date(startDate).getDay()]?.label}
                 </p>
               )}
@@ -499,16 +499,16 @@ export default function RecurringBookingsPage() {
                 <h3 className="text-lg font-semibold text-neutral">
                   {booking.user?.full_name || 'Usuario no encontrado'}
                 </h3>
-                <p className="text-muted">{booking.user?.email}</p>
-                <p className="text-sm text-muted">
+                <p className="text-neutral">{booking.user?.email}</p>
+                <p className="text-sm text-neutral">
                   {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} -{' '}
                   {booking.start_time} - {booking.end_time}
                 </p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-neutral">
                   Cancha {booking.court} - {booking.duration_minutes} minutos
                 </p>
                 {booking.start_date && (
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-neutral">
                     Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
                     {booking.end_date &&
                       ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
@@ -540,7 +540,7 @@ export default function RecurringBookingsPage() {
 
         {recurringBookings.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-muted">No hay reservas recurrentes configuradas.</p>
+            <p className="text-neutral">No hay reservas recurrentes configuradas.</p>
           </div>
         )}
       </div>

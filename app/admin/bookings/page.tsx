@@ -389,7 +389,7 @@ export default function BookingsAdminPage() {
 
         {/* Indicador de semana actual */}
         {weekDays[0].isCurrentWeek && (
-          <div className="text-center text-sm text-muted mb-2">Semana actual</div>
+          <div className="text-center text-sm text-neutral mb-2">Semana actual</div>
         )}
       </div>
 
@@ -605,7 +605,7 @@ export default function BookingsAdminPage() {
                       </>
                     )}
                     {b.is_recurring && (
-                      <span className="text-gray-500 text-sm">Sin acciones disponibles</span>
+                      <span className="text-neutral text-sm">Sin acciones disponibles</span>
                     )}
                   </td>
                 </tr>
@@ -695,7 +695,7 @@ export default function BookingsAdminPage() {
 
       {/* Mensaje si no hay reservas */}
       {bookings.length === 0 && (
-        <div className="text-center text-gray-500 py-8">No hay reservas para esta fecha</div>
+        <div className="text-center text-neutral py-8">No hay reservas para esta fecha</div>
       )}
     </div>
   );

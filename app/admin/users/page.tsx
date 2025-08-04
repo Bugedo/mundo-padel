@@ -233,12 +233,12 @@ export default function UsersPage() {
 
   const getStatusColor = (booking: Booking) => {
     if (booking.is_recurring) {
-      return booking.active ? 'text-green-600' : 'text-gray-600';
+      return booking.active ? 'text-success' : 'text-muted';
     }
-    if (booking.cancelled) return 'text-red-600';
-    if (booking.present) return 'text-green-600';
-    if (booking.confirmed) return 'text-blue-600';
-    return 'text-orange-600';
+    if (booking.cancelled) return 'text-error';
+    if (booking.present) return 'text-success';
+    if (booking.confirmed) return 'text-primary';
+    return 'text-muted';
   };
 
   if (loading) return <div>Cargando usuarios...</div>;
@@ -246,10 +246,10 @@ export default function UsersPage() {
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600 mb-4">Error: {error}</p>
+        <p className="text-error mb-4">Error: {error}</p>
         <button
           onClick={() => fetchUsers(showAllUsers)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
         >
           Reintentar
         </button>
@@ -269,15 +269,15 @@ export default function UsersPage() {
             placeholder="Buscar usuarios por nombre o email..."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="border rounded px-3 py-2 w-full max-w-md"
+            className="border border-muted rounded px-3 py-2 w-full max-w-md bg-surface text-neutral"
           />
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-neutral">
             {showAllUsers ? 'Mostrando todos los usuarios' : 'Mostrando solo administradores'}
           </div>
         </div>
         {!searchTerm && (
-          <div className="text-sm text-blue-600">
-            💡 Usa el buscador para acceder a todos los usuarios del sistema
+          <div className="text-sm text-neutral">
+            Usa el buscador para acceder a todos los usuarios del sistema
           </div>
         )}
       </div>
@@ -285,39 +285,41 @@ export default function UsersPage() {
       {/* Users list */}
       <div className="space-y-4">
         {filteredUsers.map((user) => (
-          <div key={user.id} className="border rounded p-4">
+          <div key={user.id} className="border border-muted rounded p-4 bg-surface">
             {editingUserId === user.id ? (
               // Edit form
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-blue-600">Editando Usuario</h3>
+                <h3 className="text-lg font-semibold text-primary">Editando Usuario</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Nombre Completo</label>
+                    <label className="block text-sm font-medium mb-2 text-neutral">
+                      Nombre Completo
+                    </label>
                     <input
                       type="text"
                       value={editForm.full_name}
                       onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                      className="border rounded px-3 py-2 w-full"
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                       placeholder="Nombre completo"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
+                    <label className="block text-sm font-medium mb-2 text-neutral">Email</label>
                     <input
                       type="email"
                       value={editForm.email}
                       onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      className="border rounded px-3 py-2 w-full"
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                       placeholder="email@ejemplo.com"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Teléfono</label>
+                    <label className="block text-sm font-medium mb-2 text-neutral">Teléfono</label>
                     <input
                       type="tel"
                       value={editForm.phone}
                       onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                      className="border rounded px-3 py-2 w-full"
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                       placeholder="+54 9 11 1234-5678"
                     />
                   </div>
@@ -325,13 +327,13 @@ export default function UsersPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={handleSaveEdit}
-                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                        className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
                       >
                         Guardar
                       </button>
                       <button
                         onClick={handleCancelEdit}
-                        className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+                        className="bg-muted text-neutral px-4 py-2 rounded hover:bg-accent"
                       >
                         Cancelar
                       </button>
@@ -343,31 +345,33 @@ export default function UsersPage() {
               // Normal user display
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold">{user.full_name || 'Sin nombre'}</h3>
-                  <p className="text-gray-600">{user.email}</p>
-                  {user.phone && <p className="text-gray-600">Tel: {user.phone}</p>}
-                  <p className="text-sm text-gray-500">
+                  <h3 className="text-lg font-semibold text-neutral">
+                    {user.full_name || 'Sin nombre'}
+                  </h3>
+                  <p className="text-neutral">{user.email}</p>
+                  {user.phone && <p className="text-neutral">Tel: {user.phone}</p>}
+                  <p className="text-sm text-neutral">
                     Rol: {user.role === 'admin' ? 'Administrador' : 'Usuario'}
                   </p>
-                  <p className="text-sm text-gray-500">Registrado: {formatDate(user.created_at)}</p>
+                  <p className="text-sm text-neutral">Registrado: {formatDate(user.created_at)}</p>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditUser(user)}
-                    className="bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700"
+                    className="bg-accent text-neutral px-3 py-1 rounded hover:bg-accent-hover"
                   >
                     Editar
                   </button>
                   <button
                     onClick={() => handleToggleBookings(user.id)}
-                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                    className="bg-primary text-light px-3 py-1 rounded hover:bg-primary-hover"
                   >
                     {expandedUserId === user.id ? 'Ocultar' : 'Ver'} Reservas
                   </button>
                   <button
                     onClick={() => handleDelete(user.id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                    className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
                   >
                     Eliminar
                   </button>
@@ -377,14 +381,14 @@ export default function UsersPage() {
 
             {/* Expanded bookings section */}
             {expandedUserId === user.id && editingUserId !== user.id && (
-              <div className="mt-4 border-t pt-4">
+              <div className="mt-4 border-t border-muted pt-4">
                 <div className="flex gap-4 mb-4">
                   <button
                     onClick={() => handleBookingFilterChange(user.id, 'active')}
                     className={`px-3 py-1 rounded ${
                       bookingFilter === 'active'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700'
+                        ? 'bg-primary text-light'
+                        : 'bg-surface text-neutral border border-muted'
                     }`}
                   >
                     Reservas Activas
@@ -393,8 +397,8 @@ export default function UsersPage() {
                     onClick={() => handleBookingFilterChange(user.id, 'past')}
                     className={`px-3 py-1 rounded ${
                       bookingFilter === 'past'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700'
+                        ? 'bg-primary text-light'
+                        : 'bg-surface text-neutral border border-muted'
                     }`}
                   >
                     Reservas Pasadas
@@ -403,15 +407,15 @@ export default function UsersPage() {
 
                 <div className="space-y-2">
                   {userBookings[user.id]?.map((booking) => (
-                    <div key={booking.id} className="bg-gray-50 p-3 rounded">
+                    <div key={booking.id} className="bg-surface p-3 rounded border border-muted">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-medium">{formatBookingDate(booking)}</p>
-                          <p className="text-sm text-gray-600">
+                          <p className="font-medium text-neutral">{formatBookingDate(booking)}</p>
+                          <p className="text-sm text-neutral">
                             {booking.start_time} - {booking.end_time} ({booking.duration_minutes}{' '}
                             min)
                           </p>
-                          <p className="text-sm text-gray-600">Cancha: {booking.court}</p>
+                          <p className="text-sm text-neutral">Cancha: {booking.court}</p>
                         </div>
                         <span className={`px-2 py-1 rounded text-xs ${getStatusColor(booking)}`}>
                           {getBookingStatus(booking)}
@@ -420,7 +424,7 @@ export default function UsersPage() {
                     </div>
                   ))}
                   {userBookings[user.id]?.length === 0 && (
-                    <p className="text-gray-500 text-center py-4">
+                    <p className="text-neutral text-center py-4">
                       No hay reservas {bookingFilter === 'active' ? 'activas' : 'pasadas'} para este
                       usuario.
                     </p>
@@ -433,7 +437,7 @@ export default function UsersPage() {
 
         {filteredUsers.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-gray-500">
+            <p className="text-neutral">
               {searchTerm
                 ? 'No se encontraron usuarios que coincidan con la búsqueda.'
                 : 'No hay usuarios registrados.'}
