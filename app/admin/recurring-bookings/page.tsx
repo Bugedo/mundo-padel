@@ -330,32 +330,32 @@ export default function RecurringBookingsPage() {
       <div className="mb-6">
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
         >
-          {showCreateForm ? '−' : '+'} Crear Reserva Recurrente
+          {showCreateForm ? 'Cancelar' : 'Crear Reserva Recurrente'}
         </button>
       </div>
 
       {/* Create form */}
       {showCreateForm && (
-        <div className="bg-gray-50 p-6 rounded border mb-6">
-          <h3 className="text-lg font-semibold mb-4">Crear Reserva Recurrente</h3>
+        <div className="bg-surface p-6 rounded border border-muted mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-neutral">Crear Reserva Recurrente</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* User selection */}
             <div className="user-dropdown-container">
-              <label className="block text-sm font-medium mb-2">Usuario</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
               {selectedUserInfo ? (
-                <div className="border rounded px-3 py-2 bg-gray-50">
-                  <p className="font-medium">{selectedUserInfo.full_name}</p>
-                  <p className="text-sm text-gray-600">{selectedUserInfo.email}</p>
+                <div className="border border-muted rounded px-3 py-2 bg-surface">
+                  <p className="font-medium text-neutral">{selectedUserInfo.full_name}</p>
+                  <p className="text-sm text-muted">{selectedUserInfo.email}</p>
                   <button
                     onClick={() => {
                       setSelectedUser('');
                       setSelectedUserInfo(null);
                       setUserSearchTerm('');
                     }}
-                    className="text-sm text-red-600 hover:text-red-800 mt-1"
+                    className="text-sm text-error hover:underline mt-1"
                   >
                     Cambiar usuario
                   </button>
@@ -371,10 +371,10 @@ export default function RecurringBookingsPage() {
                       setShowUserDropdown(true);
                     }}
                     onFocus={() => setShowUserDropdown(true)}
-                    className="border rounded px-3 py-2 w-full"
+                    className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                   />
                   {showUserDropdown && userSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border rounded bg-white">
+                    <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
                       {filteredUsers.map((user) => (
                         <div
                           key={user.id}
@@ -384,7 +384,7 @@ export default function RecurringBookingsPage() {
                             setUserSearchTerm(user.full_name || user.email);
                             setShowUserDropdown(false);
                           }}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
                         >
                           {user.full_name} ({user.email})
                         </div>
@@ -397,15 +397,15 @@ export default function RecurringBookingsPage() {
 
             {/* Date range */}
             <div>
-              <label className="block text-sm font-medium mb-2">Fecha de inicio</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Fecha de inicio</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
               {startDate && (
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted mt-1">
                   Día de la semana: {daysOfWeek[new Date(startDate).getDay()]?.label}
                 </p>
               )}
@@ -413,11 +413,11 @@ export default function RecurringBookingsPage() {
 
             {/* Time selection */}
             <div>
-              <label className="block text-sm font-medium mb-2">Horario</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Horario</label>
               <div className="mb-2">
                 <button
                   onClick={() => setShowEarlySlots(!showEarlySlots)}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-primary hover:underline"
                 >
                   {showEarlySlots ? 'Ocultar horarios tempranos' : 'Mostrar horarios tempranos'}
                 </button>
@@ -425,7 +425,7 @@ export default function RecurringBookingsPage() {
               <select
                 value={selectedTime}
                 onChange={(e) => setSelectedTime(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               >
                 <option value="">Seleccionar horario</option>
                 {slots.map((slot) => (
@@ -438,11 +438,11 @@ export default function RecurringBookingsPage() {
 
             {/* Duration */}
             <div>
-              <label className="block text-sm font-medium mb-2">Duración</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Duración</label>
               <select
                 value={selectedDuration}
                 onChange={(e) => setSelectedDuration(Number(e.target.value) as 60 | 90 | 120)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               >
                 <option value={60}>60 minutos</option>
                 <option value={90}>90 minutos</option>
@@ -452,11 +452,11 @@ export default function RecurringBookingsPage() {
 
             {/* Court */}
             <div>
-              <label className="block text-sm font-medium mb-2">Cancha</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Cancha</label>
               <select
                 value={selectedCourt}
                 onChange={(e) => setSelectedCourt(Number(e.target.value) as 1 | 2 | 3)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               >
                 <option value={1}>Cancha 1</option>
                 <option value={2}>Cancha 2</option>
@@ -465,12 +465,14 @@ export default function RecurringBookingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Fecha de fin (opcional)</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">
+                Fecha de fin (opcional)
+              </label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
             </div>
 
@@ -479,7 +481,7 @@ export default function RecurringBookingsPage() {
               <button
                 onClick={createRecurringBooking}
                 disabled={!selectedUser || !selectedTime || !startDate}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                className="bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:bg-muted"
               >
                 Crear Reserva Recurrente
               </button>
@@ -491,22 +493,22 @@ export default function RecurringBookingsPage() {
       {/* Recurring bookings list */}
       <div className="space-y-4">
         {recurringBookings.map((booking) => (
-          <div key={booking.id} className="border rounded p-4">
+          <div key={booking.id} className="border border-muted rounded p-4 bg-surface">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-lg font-semibold text-neutral">
                   {booking.user?.full_name || 'Usuario no encontrado'}
                 </h3>
-                <p className="text-gray-600">{booking.user?.email}</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-muted">{booking.user?.email}</p>
+                <p className="text-sm text-muted">
                   {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} -{' '}
                   {booking.start_time} - {booking.end_time}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted">
                   Cancha {booking.court} - {booking.duration_minutes} minutos
                 </p>
                 {booking.start_date && (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted">
                     Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
                     {booking.end_date &&
                       ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
@@ -519,15 +521,15 @@ export default function RecurringBookingsPage() {
                   onClick={() => updateRecurringBooking(booking.id, 'active', !booking.active)}
                   className={`px-3 py-1 rounded ${
                     booking.active
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                      ? 'bg-success text-light hover:bg-success/80'
+                      : 'bg-muted text-neutral hover:bg-accent'
                   }`}
                 >
                   {booking.active ? 'Activa' : 'Inactiva'}
                 </button>
                 <button
                   onClick={() => deleteRecurringBooking(booking.id)}
-                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                  className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
                 >
                   Eliminar
                 </button>
@@ -538,7 +540,7 @@ export default function RecurringBookingsPage() {
 
         {recurringBookings.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-gray-500">No hay reservas recurrentes configuradas.</p>
+            <p className="text-muted">No hay reservas recurrentes configuradas.</p>
           </div>
         )}
       </div>
