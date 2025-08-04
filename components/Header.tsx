@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useUser } from '@/context/UserContext';
-import { LogIn, User } from 'lucide-react';
+import { LogIn, User, Calendar } from 'lucide-react';
 import LogoutButton from '@/components/LogoutButton';
 
 export default function Header() {
@@ -57,6 +57,14 @@ export default function Header() {
                     {user.email}
                   </div>
                   <div className="px-4 py-2">
+                    <Link
+                      href={`/${user.id}/reservas`}
+                      className="flex items-center gap-2 text-neutral hover:text-primary transition mb-2"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Calendar size={16} />
+                      Ver mis reservas
+                    </Link>
                     <LogoutButton onLogout={() => setMenuOpen(false)} />
                   </div>
                 </div>
