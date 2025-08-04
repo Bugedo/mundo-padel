@@ -117,8 +117,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: existingError.message }, { status: 500 });
     }
 
+    // Get all recurring bookings for this day
+    const dateObj = new Date(date);
+    const dayOfWeek = dateObj.getDay();
+
+    const { data: recurringBookings, error: recurringError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .eq('day_of_week', dayOfWeek)
+      .eq('active', true);
+
+    if (recurringError) {
+      return NextResponse.json({ error: recurringError.message }, { status: 500 });
+    }
+
     // Check for conflicts with regular bookings
-    const conflictingBookings = (existingBookings || []).filter((booking) => {
+    const conflictingRegularBookings = (existingBookings || []).filter((booking) => {
       const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
       const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
       const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
@@ -131,9 +145,26 @@ export async function POST(req: Request) {
       );
     });
 
-    // Get taken courts from conflicting bookings
-    const takenCourts = conflictingBookings.map((b) => b.court);
-    const availableCourt = [1, 2, 3].find((c) => !takenCourts.includes(c));
+    // Check for conflicts with recurring bookings
+    const conflictingRecurringBookings = (recurringBookings || []).filter((booking) => {
+      const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
+      const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
+      const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
+      const bookingEndMinutes = bookingEndH * 60 + bookingEndM;
+
+      // Check for overlap
+      return (
+        (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
+        (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
+      );
+    });
+
+    // Get taken courts from both regular and recurring bookings
+    const takenCourtsFromRegular = conflictingRegularBookings.map((b) => b.court);
+    const takenCourtsFromRecurring = conflictingRecurringBookings.map((b) => b.court);
+    const allTakenCourts = [...new Set([...takenCourtsFromRegular, ...takenCourtsFromRecurring])];
+
+    const availableCourt = [1, 2, 3].find((c) => !allTakenCourts.includes(c));
 
     if (!availableCourt) {
       return NextResponse.json(
@@ -142,42 +173,6 @@ export async function POST(req: Request) {
         },
         { status: 409 },
       );
-    }
-
-    // Check for conflicts with recurring bookings for the available court
-    const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay();
-
-    const { data: recurringBookings, error: recurringError } = await supabaseAdmin
-      .from('recurring_bookings')
-      .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .eq('court', availableCourt)
-      .eq('active', true);
-
-    if (recurringError) {
-      return NextResponse.json({ error: recurringError.message }, { status: 500 });
-    }
-
-    // Check for time conflicts with recurring bookings
-    for (const recurring of recurringBookings || []) {
-      const [recurringStartH, recurringStartM] = recurring.start_time.split(':').map(Number);
-      const [recurringEndH, recurringEndM] = recurring.end_time.split(':').map(Number);
-      const recurringStartMinutes = recurringStartH * 60 + recurringStartM;
-      const recurringEndMinutes = recurringEndH * 60 + recurringEndM;
-
-      // Check for overlap
-      if (
-        (newStartMinutes < recurringEndMinutes && newEndMinutes > recurringStartMinutes) ||
-        (recurringStartMinutes < newEndMinutes && recurringEndMinutes > newStartMinutes)
-      ) {
-        return NextResponse.json(
-          {
-            error: `Time slot conflicts with recurring booking: ${recurring.start_time} - ${recurring.end_time} (${getDayName(dayOfWeek)})`,
-          },
-          { status: 409 },
-        );
-      }
     }
 
     // Create the booking with the automatically assigned court
