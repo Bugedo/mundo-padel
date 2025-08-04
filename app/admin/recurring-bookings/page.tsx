@@ -308,13 +308,13 @@ export default function RecurringBookingsPage() {
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600 mb-4">Error: {error}</p>
+        <p className="text-error mb-4">Error: {error}</p>
         <button
           onClick={() => {
             setError(null);
             fetchRecurringBookings();
           }}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className="bg-primary text-light px-4 py-2 rounded hover:bg-primary-hover"
         >
           Reintentar
         </button>
@@ -481,7 +481,7 @@ export default function RecurringBookingsPage() {
               <button
                 onClick={createRecurringBooking}
                 disabled={!selectedUser || !selectedTime || !startDate}
-                className="bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:bg-muted"
+                className="bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:bg-accent disabled:opacity-50"
               >
                 Crear Reserva Recurrente
               </button>
@@ -522,7 +522,7 @@ export default function RecurringBookingsPage() {
                   className={`px-3 py-1 rounded ${
                     booking.active
                       ? 'bg-success text-light hover:bg-success/80'
-                      : 'bg-muted text-neutral hover:bg-accent'
+                      : 'bg-accent text-neutral hover:bg-accent-hover'
                   }`}
                 >
                   {booking.active ? 'Activa' : 'Inactiva'}

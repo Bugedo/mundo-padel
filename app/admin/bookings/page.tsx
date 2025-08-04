@@ -311,22 +311,22 @@ export default function BookingsAdminPage() {
 
   const getStatusColor = (booking: Booking) => {
     if (booking.is_recurring) {
-      return 'text-blue-600';
+      return 'text-neutral';
     }
-    if (booking.cancelled) return 'text-red-600';
-    if (booking.present) return 'text-green-600';
-    if (booking.confirmed) return 'text-blue-600';
-    return 'text-orange-600';
+    if (booking.cancelled) return 'text-error';
+    if (booking.present) return 'text-neutral';
+    if (booking.confirmed) return 'text-neutral';
+    return 'text-neutral';
   };
 
   const getStatusBgColor = (booking: Booking) => {
     if (booking.is_recurring) {
-      return 'bg-blue-100';
+      return 'bg-surface border border-muted';
     }
-    if (booking.cancelled) return 'bg-red-100';
-    if (booking.present) return 'bg-green-100';
-    if (booking.confirmed) return 'bg-blue-100';
-    return 'bg-orange-100';
+    if (booking.cancelled) return 'bg-error/10 border border-error';
+    if (booking.present) return 'bg-surface border border-muted';
+    if (booking.confirmed) return 'bg-surface border border-muted';
+    return 'bg-surface border border-muted';
   };
 
   if (loading) return <div>Cargando reservas...</div>;
@@ -468,7 +468,7 @@ export default function BookingsAdminPage() {
               <select
                 value={selectedDuration}
                 onChange={(e) => setSelectedDuration(Number(e.target.value) as 60 | 90 | 120)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               >
                 <option value={60}>60 minutos</option>
                 <option value={90}>90 minutos</option>
@@ -481,7 +481,7 @@ export default function BookingsAdminPage() {
               <button
                 onClick={createManualBooking}
                 disabled={!selectedUser || !selectedTime}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                className="bg-primary text-light px-4 py-2 rounded hover:bg-primary-hover disabled:bg-muted disabled:text-neutral"
               >
                 Crear Reserva
               </button>
@@ -493,9 +493,9 @@ export default function BookingsAdminPage() {
       {/* Sección: PENDIENTES */}
       {pendingBookings.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-orange-600">Pendientes</h2>
-          <table className="w-full border border-gray-300 rounded">
-            <thead className="bg-orange-50">
+          <h2 className="text-xl font-semibold mb-4 text-neutral">Pendientes</h2>
+          <table className="w-full border border-muted rounded">
+            <thead className="bg-surface">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
                 <th className="p-2 text-left">Fecha</th>
@@ -523,23 +523,23 @@ export default function BookingsAdminPage() {
                     <td className="p-2">{b.court || '—'}</td>
                     <td className="p-2">
                       {remaining > 0 ? (
-                        <span className={remaining < 60 ? 'text-red-600 font-bold' : ''}>
+                        <span className={remaining < 60 ? 'text-error font-bold' : 'text-neutral'}>
                           {minutes}:{seconds.toString().padStart(2, '0')}
                         </span>
                       ) : (
-                        <span className="text-red-600 font-bold">Expirada</span>
+                        <span className="text-error font-bold">Expirada</span>
                       )}
                     </td>
                     <td className="p-2 flex gap-2">
                       <button
                         onClick={() => updateBooking(b.id, 'confirmed', true)}
-                        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                        className="bg-success text-light px-3 py-1 rounded hover:bg-success/80"
                       >
                         Confirmar
                       </button>
                       <button
                         onClick={() => updateBooking(b.id, 'cancelled', true)}
-                        className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                        className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
                       >
                         Cancelar
                       </button>
@@ -555,9 +555,9 @@ export default function BookingsAdminPage() {
       {/* Sección: CONFIRMADAS */}
       {confirmedBookings.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-blue-600">Confirmadas</h2>
-          <table className="w-full border border-gray-300 rounded">
-            <thead className="bg-blue-50">
+          <h2 className="text-xl font-semibold mb-4 text-neutral">Confirmadas</h2>
+          <table className="w-full border border-muted rounded">
+            <thead className="bg-surface">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
                 <th className="p-2 text-left">Fecha</th>
@@ -590,7 +590,7 @@ export default function BookingsAdminPage() {
                       <>
                         <button
                           onClick={() => updateBooking(b.id, 'present', true)}
-                          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                          className="bg-success text-light px-3 py-1 rounded hover:bg-success/80"
                         >
                           Presente
                         </button>
@@ -598,7 +598,7 @@ export default function BookingsAdminPage() {
                           onClick={() => {
                             updateBooking(b.id, 'cancelled', true);
                           }}
-                          className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                          className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
                         >
                           Ausente
                         </button>
@@ -618,9 +618,9 @@ export default function BookingsAdminPage() {
       {/* Sección: FINALIZADAS */}
       {finishedBookings.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-green-600">Finalizadas</h2>
-          <table className="w-full border border-gray-300 rounded">
-            <thead className="bg-green-50">
+          <h2 className="text-xl font-semibold mb-4 text-neutral">Finalizadas</h2>
+          <table className="w-full border border-muted rounded">
+            <thead className="bg-surface">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
                 <th className="p-2 text-left">Fecha</th>
@@ -657,9 +657,9 @@ export default function BookingsAdminPage() {
       {/* Sección: CANCELADAS */}
       {cancelledBookings.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-red-600">Canceladas</h2>
-          <table className="w-full border border-gray-300 rounded">
-            <thead className="bg-red-50">
+          <h2 className="text-xl font-semibold mb-4 text-neutral">Canceladas</h2>
+          <table className="w-full border border-muted rounded">
+            <thead className="bg-surface">
               <tr>
                 <th className="p-2 text-left">Usuario</th>
                 <th className="p-2 text-left">Fecha</th>
