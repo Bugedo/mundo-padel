@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
-import { LogIn, User, Mail, Phone, UserCheck } from 'lucide-react';
+import { LogIn, User, Mail, Phone, UserCheck, Key } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +93,39 @@ export default function LoginPage() {
     setFullName('');
     setPhone('');
     setMessage('');
+    setVerificationCode('');
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode.trim()) {
+      setMessage('❌ Por favor ingresa el código de verificación');
+      return;
+    }
+
+    setVerifying(true);
+    setMessage('');
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: verificationCode,
+        type: 'signup',
+      });
+
+      if (error) {
+        setMessage(`❌ ${error.message}`);
+      } else {
+        setMessage('✅ ¡Cuenta verificada exitosamente!');
+        setTimeout(() => {
+          handleCloseVerificationModal();
+          router.push('/');
+        }, 2000);
+      }
+    } catch (err) {
+      setMessage('❌ Error al verificar el código');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -227,18 +262,48 @@ export default function LoginPage() {
               <UserCheck size={48} className="mx-auto text-success mb-4" />
               <h2 className="text-xl font-bold mb-2 text-neutral">¡Cuenta creada exitosamente!</h2>
               <p className="text-neutral mb-4">
-                Te hemos enviado un email de verificación a <strong>{email}</strong>
+                Te hemos enviado un código de verificación a <strong>{email}</strong>
               </p>
               <p className="text-sm text-neutral mb-6">
-                Por favor revisa tu bandeja de entrada y haz clic en el enlace de verificación para
-                activar tu cuenta.
+                Por favor revisa tu bandeja de entrada e ingresa el código de 6 dígitos que
+                recibiste.
               </p>
-              <button
-                onClick={handleCloseVerificationModal}
-                className="bg-success text-light px-6 py-2 rounded hover:bg-success/80"
-              >
-                Entendido
-              </button>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2 text-neutral">
+                  Código de verificación
+                </label>
+                <div className="flex items-center gap-2">
+                  <Key size={16} className="text-muted" />
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    placeholder="123456"
+                    maxLength={6}
+                    className="flex-1 border border-muted rounded px-3 py-2 bg-surface text-neutral text-center text-lg tracking-widest"
+                    style={{ letterSpacing: '0.5em' }}
+                  />
+                </div>
+              </div>
+
+              {message && <p className="text-center text-sm text-neutral mb-4">{message}</p>}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleVerifyCode}
+                  disabled={verifying || !verificationCode.trim()}
+                  className="flex-1 bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:opacity-50"
+                >
+                  {verifying ? 'Verificando...' : 'Verificar'}
+                </button>
+                <button
+                  onClick={handleCloseVerificationModal}
+                  className="bg-accent text-neutral px-4 py-2 rounded hover:bg-accent-hover"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </div>
