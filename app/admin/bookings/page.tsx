@@ -27,6 +27,14 @@ interface User {
   email: string;
 }
 
+interface WeekDay {
+  date: Date;
+  dateString: string;
+  dayName: string;
+  isToday: boolean;
+  isCurrentWeek: boolean;
+}
+
 const allSlots = [
   { start: '08:00', end: '08:30' },
   { start: '08:30', end: '09:00' },
@@ -67,6 +75,7 @@ const defaultSlots = allSlots.filter((slot) => slot.start >= '16:30');
 export default function BookingsAdminPage() {
   const baseDate = useRef(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +91,51 @@ export default function BookingsAdminPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+  // Get the start of the week (Monday) for a given date
+  const getWeekStart = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+    return new Date(d.setDate(diff));
+  };
+
+  // Generate week days array
+  const getWeekDays = (weekStart: Date): WeekDay[] => {
+    const days: WeekDay[] = [];
+    const today = new Date();
+    const currentWeekStart = getWeekStart(today);
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+
+      const dayName = date
+        .toLocaleDateString('es-ES', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        })
+        .replace('.', '');
+
+      days.push({
+        date,
+        dateString: formatDate(date),
+        dayName,
+        isToday: formatDate(date) === formatDate(today),
+        isCurrentWeek: formatDate(weekStart) === formatDate(currentWeekStart),
+      });
+    }
+
+    return days;
+  };
+
+  // Initialize current week start
+  useEffect(() => {
+    const today = new Date();
+    setCurrentWeekStart(getWeekStart(today));
+    setSelectedDate(today);
+  }, []);
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -143,17 +197,24 @@ export default function BookingsAdminPage() {
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
 
-  const changeDate = (offset: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + offset);
+  const changeWeek = (offset: number) => {
+    const newWeekStart = new Date(currentWeekStart);
+    newWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
+    setCurrentWeekStart(newWeekStart);
 
-    const minDate = new Date(baseDate.current);
-    const maxDate = new Date(baseDate.current);
-    maxDate.setDate(baseDate.current.getDate() + 6);
-
-    if (newDate >= minDate && newDate <= maxDate) {
-      setSelectedDate(newDate);
+    // If we're going to the current week, select today's date
+    const today = new Date();
+    const currentWeekStartDate = getWeekStart(today);
+    if (formatDate(newWeekStart) === formatDate(currentWeekStartDate)) {
+      setSelectedDate(today);
+    } else {
+      // Otherwise, select the first day of the new week
+      setSelectedDate(newWeekStart);
     }
+  };
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date);
   };
 
   const updateBooking = async (id: string, field: keyof Booking, value: boolean) => {
@@ -270,26 +331,66 @@ export default function BookingsAdminPage() {
 
   if (loading) return <div>Cargando reservas...</div>;
 
+  const weekDays = getWeekDays(currentWeekStart);
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Reservas</h1>
 
-      {/* Navegación de fechas */}
-      <div className="flex items-center gap-4 mb-4">
-        <button onClick={() => changeDate(-1)} className="bg-muted px-3 py-1 rounded">
-          ← Día anterior
-        </button>
-        <span className="font-semibold">
-          {selectedDate.toLocaleDateString('es-ES', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </span>
-        <button onClick={() => changeDate(1)} className="bg-muted px-3 py-1 rounded">
-          Día siguiente →
-        </button>
+      {/* Navegación semanal */}
+      <div className="mb-6">
+        {/* Botón "Hoy" siempre visible */}
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={() => {
+              const today = new Date();
+              setCurrentWeekStart(getWeekStart(today));
+              setSelectedDate(today);
+            }}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium shadow-md transition-colors"
+          >
+            Hoy
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => changeWeek(-1)}
+            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded font-medium"
+          >
+            ← Semana anterior
+          </button>
+
+          <div className="flex gap-1">
+            {weekDays.map((day) => (
+              <button
+                key={day.dateString}
+                onClick={() => selectDate(day.date)}
+                className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                  formatDate(selectedDate) === day.dateString
+                    ? 'bg-blue-600 text-white'
+                    : day.isToday
+                      ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                {day.dayName}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => changeWeek(1)}
+            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded font-medium"
+          >
+            Semana siguiente →
+          </button>
+        </div>
+
+        {/* Indicador de semana actual */}
+        {weekDays[0].isCurrentWeek && (
+          <div className="text-center text-sm text-gray-600 mb-2">Semana actual</div>
+        )}
       </div>
 
       {/* Botón crear reserva */}
