@@ -347,7 +347,7 @@ export default function BookingsAdminPage() {
               setCurrentWeekStart(getWeekStart(today));
               setSelectedDate(today);
             }}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium shadow-md transition-colors"
+            className="bg-primary hover:bg-primary-hover text-light px-6 py-2 rounded-lg font-medium shadow-md transition-colors"
           >
             Hoy
           </button>
@@ -356,7 +356,7 @@ export default function BookingsAdminPage() {
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => changeWeek(-1)}
-            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded font-medium"
+            className="bg-surface hover:bg-accent text-neutral px-4 py-2 rounded font-medium border border-muted"
           >
             ← Semana anterior
           </button>
@@ -368,10 +368,10 @@ export default function BookingsAdminPage() {
                 onClick={() => selectDate(day.date)}
                 className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
                   formatDate(selectedDate) === day.dateString
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-primary text-light'
                     : day.isToday
-                      ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      ? 'bg-accent text-neutral border-2 border-primary'
+                      : 'bg-surface hover:bg-accent text-neutral border border-muted'
                 }`}
               >
                 {day.dayName}
@@ -381,7 +381,7 @@ export default function BookingsAdminPage() {
 
           <button
             onClick={() => changeWeek(1)}
-            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded font-medium"
+            className="bg-surface hover:bg-accent text-neutral px-4 py-2 rounded font-medium border border-muted"
           >
             Semana siguiente →
           </button>
@@ -389,7 +389,7 @@ export default function BookingsAdminPage() {
 
         {/* Indicador de semana actual */}
         {weekDays[0].isCurrentWeek && (
-          <div className="text-center text-sm text-gray-600 mb-2">Semana actual</div>
+          <div className="text-center text-sm text-muted mb-2">Semana actual</div>
         )}
       </div>
 
@@ -397,30 +397,30 @@ export default function BookingsAdminPage() {
       <div className="mb-6">
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
         >
-          {showCreateForm ? '−' : '+'} Crear Reserva
+          {showCreateForm ? 'Cancelar' : 'Crear Reserva'}
         </button>
       </div>
 
       {/* Formulario de creación manual */}
       {showCreateForm && (
-        <div className="bg-gray-50 p-4 rounded border mb-6">
-          <h3 className="text-lg font-semibold mb-4">Crear Reserva Manual</h3>
+        <div className="bg-surface p-4 rounded border border-muted mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-neutral">Crear Reserva Manual</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Buscador de usuarios */}
             <div>
-              <label className="block text-sm font-medium mb-2">Usuario</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
               <input
                 type="text"
                 placeholder="Buscar por nombre o email..."
                 value={userSearchTerm}
                 onChange={(e) => setUserSearchTerm(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
               {userSearchTerm && (
-                <div className="mt-2 max-h-40 overflow-y-auto border rounded">
+                <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
                   {filteredUsers.map((user) => (
                     <div
                       key={user.id}
@@ -428,7 +428,7 @@ export default function BookingsAdminPage() {
                         setSelectedUser(user.id);
                         setUserSearchTerm(user.full_name || user.email);
                       }}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                      className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
                     >
                       {user.full_name} ({user.email})
                     </div>
@@ -439,11 +439,11 @@ export default function BookingsAdminPage() {
 
             {/* Horarios */}
             <div>
-              <label className="block text-sm font-medium mb-2">Horario</label>
+              <label className="block text-sm font-medium mb-2 text-neutral">Horario</label>
               <div className="mb-2">
                 <button
                   onClick={() => setShowEarlySlots(!showEarlySlots)}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-primary hover:underline"
                 >
                   {showEarlySlots ? 'Ocultar horarios tempranos' : 'Mostrar horarios tempranos'}
                 </button>
@@ -451,7 +451,7 @@ export default function BookingsAdminPage() {
               <select
                 value={selectedTime}
                 onChange={(e) => setSelectedTime(e.target.value)}
-                className="border rounded px-3 py-2 w-full"
+                className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               >
                 <option value="">Seleccionar horario</option>
                 {slots.map((slot) => (

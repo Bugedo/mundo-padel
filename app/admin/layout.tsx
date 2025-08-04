@@ -11,7 +11,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   if (loading) {
-    return <div className="p-8">Cargando...</div>;
+    return <div className="p-8 bg-background text-neutral">Cargando...</div>;
   }
 
   if (!user) {
@@ -29,16 +29,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-64 bg-green-900 text-white flex flex-col">
-        <div className="p-4 text-2xl font-bold border-b border-green-700">Admin Panel</div>
+    <div className="flex min-h-screen bg-background">
+      <aside className="w-64 bg-surface border-r border-muted flex flex-col">
+        <div className="p-4 text-2xl font-bold border-b border-muted text-neutral">Admin Panel</div>
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`block px-3 py-2 rounded ${
-                pathname.startsWith(item.href) ? 'bg-green-700' : 'hover:bg-green-800'
+              className={`block px-3 py-2 rounded transition-colors ${
+                pathname.startsWith(item.href)
+                  ? 'bg-primary text-light'
+                  : 'text-neutral hover:bg-accent hover:text-light'
               }`}
             >
               {item.name}
@@ -47,7 +49,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="flex-1 bg-gray-50 p-6">{children}</main>
+      <main className="flex-1 bg-background text-neutral p-6">{children}</main>
     </div>
   );
 }
