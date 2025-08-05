@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
 
@@ -65,9 +65,19 @@ export async function POST(req: Request) {
       start_date,
       end_date,
     } = body;
-    if (!user_id || court === undefined || day_of_week === undefined || !start_time || !end_time || !duration_minutes) {
+    if (
+      !user_id ||
+      court === undefined ||
+      day_of_week === undefined ||
+      !start_time ||
+      !end_time ||
+      !duration_minutes
+    ) {
       return NextResponse.json(
-        { error: 'Missing required fields: user_id, court, day_of_week, start_time, end_time, duration_minutes' },
+        {
+          error:
+            'Missing required fields: user_id, court, day_of_week, start_time, end_time, duration_minutes',
+        },
         { status: 400 },
       );
     }
@@ -117,9 +127,12 @@ export async function POST(req: Request) {
         (newStartMinutes < existingEndMinutes && newEndMinutes > existingStartMinutes) ||
         (existingStartMinutes < newEndMinutes && existingEndMinutes > newStartMinutes)
       ) {
-        return NextResponse.json({ 
-          error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${getDayName(day_of_week)})` 
-        }, { status: 409 });
+        return NextResponse.json(
+          {
+            error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${getDayName(day_of_week)})`,
+          },
+          { status: 409 },
+        );
       }
     }
 
@@ -127,7 +140,8 @@ export async function POST(req: Request) {
     const today = new Date();
     const conflicts: Array<{ date: string; time: string; user: string }> = [];
 
-    for (let i = 0; i <= 42; i++) { // Check next 6 weeks
+    for (let i = 0; i <= 42; i++) {
+      // Check next 6 weeks
       const checkDate = new Date(today);
       checkDate.setDate(today.getDate() + i);
       const checkDateString = checkDate.toISOString().split('T')[0];
@@ -160,7 +174,7 @@ export async function POST(req: Request) {
             conflicts.push({
               date: checkDateString,
               time: `${booking.start_time} - ${booking.end_time}`,
-              user: booking.user_id
+              user: booking.user_id,
             });
           }
         }
@@ -168,10 +182,16 @@ export async function POST(req: Request) {
     }
 
     if (conflicts.length > 0) {
-      const conflictDetails = conflicts.slice(0, 3).map(c => `${c.date} (${c.time})`).join(', ');
-      return NextResponse.json({ 
-        error: `Recurring booking conflicts with existing bookings: ${conflictDetails}${conflicts.length > 3 ? ' and more...' : ''}` 
-      }, { status: 409 });
+      const conflictDetails = conflicts
+        .slice(0, 3)
+        .map((c) => `${c.date} (${c.time})`)
+        .join(', ');
+      return NextResponse.json(
+        {
+          error: `Recurring booking conflicts with existing bookings: ${conflictDetails}${conflicts.length > 3 ? ' and more...' : ''}`,
+        },
+        { status: 409 },
+      );
     }
 
     // Create the recurring booking

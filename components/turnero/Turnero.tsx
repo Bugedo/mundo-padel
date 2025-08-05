@@ -1,8 +1,36 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
+
+interface Booking {
+  id: string;
+  user_id: string;
+  court: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmed: boolean;
+  present: boolean;
+  cancelled: boolean;
+  expires_at?: string;
+  is_recurring?: boolean;
+  recurring_booking_id?: string;
+}
+
+interface PendingBooking {
+  id: string;
+  user_id: string;
+  court: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmed: boolean;
+  expires_at: string;
+}
 
 const allSlots = [
   { start: '08:00', end: '08:30' },
@@ -48,13 +76,13 @@ export default function Turnero() {
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [pendingBooking, setPendingBooking] = useState<any | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     const dateString = formatDate(selectedDate);
 
     // Use admin client to see all bookings including pending ones
@@ -68,10 +96,10 @@ export default function Turnero() {
     } else {
       console.error('Error fetching bookings:', response.status);
     }
-  };
+  }, [selectedDate]);
 
   // Fetch recurring bookings for the selected date
-  const fetchRecurringBookings = async () => {
+  const fetchRecurringBookings = useCallback(async () => {
     const dateString = formatDate(selectedDate);
     const selectedDateObj = new Date(selectedDate);
     const dayOfWeek = selectedDateObj.getDay(); // 0-6 (Sunday-Saturday)
@@ -93,7 +121,8 @@ export default function Turnero() {
         end_time: recurring.end_time,
         duration_minutes: recurring.duration_minutes,
         confirmed: true, // Recurring bookings are always confirmed
-        expires_at: null,
+        present: false,
+        expires_at: undefined,
         cancelled: false,
         is_recurring: true, // Flag to identify recurring bookings
       }));
@@ -104,7 +133,7 @@ export default function Turnero() {
         return [...regularBookings, ...recurringBookingsForDate];
       });
     }
-  };
+  }, [selectedDate]);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -113,7 +142,7 @@ export default function Turnero() {
     };
 
     loadBookings();
-  }, [selectedDate]);
+  }, [selectedDate, fetchBookings, fetchRecurringBookings]);
 
   const changeDate = (offset: number) => {
     const newDate = new Date(selectedDate);
@@ -356,7 +385,7 @@ export default function Turnero() {
   );
 }
 
-function BookingPending({ booking, onExpire }: { booking: any; onExpire: () => void }) {
+function BookingPending({ booking, onExpire }: { booking: PendingBooking; onExpire: () => void }) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {

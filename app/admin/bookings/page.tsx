@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Booking {
   id: string;
@@ -73,7 +73,6 @@ const allSlots = [
 const defaultSlots = allSlots.filter((slot) => slot.start >= '16:30');
 
 export default function BookingsAdminPage() {
-  const baseDate = useRef(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -137,7 +136,7 @@ export default function BookingsAdminPage() {
     setSelectedDate(today);
   }, []);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     setLoading(true);
     const dateString = formatDate(selectedDate);
 
@@ -151,7 +150,7 @@ export default function BookingsAdminPage() {
     }
 
     setLoading(false);
-  };
+  }, [selectedDate]);
 
   const fetchUsers = async () => {
     const res = await fetch('/api/users', { cache: 'no-store' });
@@ -166,7 +165,7 @@ export default function BookingsAdminPage() {
   useEffect(() => {
     fetchBookings();
     fetchUsers();
-  }, [selectedDate]);
+  }, [selectedDate, fetchBookings]);
 
   // Timer que actualiza cada segundo
   useEffect(() => {

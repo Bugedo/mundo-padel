@@ -139,7 +139,8 @@ export default function RecurringBookingsPage() {
       } else {
         setError(data.error || 'Error al cargar reservas recurrentes');
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error fetching recurring bookings:', error);
       setError('Error de red al cargar reservas recurrentes');
     } finally {
       setLoading(false);
@@ -198,7 +199,14 @@ export default function RecurringBookingsPage() {
 
       if (res.ok) {
         const conflictingRegular = regularBookings.filter(
-          (booking: any) =>
+          (booking: {
+            court: number;
+            cancelled: boolean;
+            confirmed: boolean;
+            expires_at?: string;
+            start_time: string;
+            end_time: string;
+          }) =>
             booking.court === selectedCourt &&
             !booking.cancelled &&
             (booking.confirmed ||
@@ -215,8 +223,8 @@ export default function RecurringBookingsPage() {
           return;
         }
       }
-    } catch (err) {
-      console.error('Error checking regular bookings:', err);
+    } catch (error: unknown) {
+      console.error('Error checking regular bookings:', error);
     }
 
     try {
@@ -235,32 +243,31 @@ export default function RecurringBookingsPage() {
         }),
       });
 
-      const data = await res.json();
-
       if (res.ok) {
         alert('Reserva recurrente creada exitosamente');
-        // Reset form to default values
+        await fetchRecurringBookings();
         setShowCreateForm(false);
         setSelectedUser('');
-        setSelectedUserInfo(null);
         setSelectedTime('');
+        setSelectedCourt(1);
+        setSelectedDuration(90);
         setStartDate('');
         setEndDate('');
-        setUserSearchTerm('');
-        setSelectedDuration(90);
-        setSelectedCourt(1);
-        setShowEarlySlots(false);
-        setShowUserDropdown(false);
-        fetchRecurringBookings();
       } else {
+        const data = await res.json();
         alert(`Error al crear reserva recurrente: ${data.error}`);
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error creating recurring booking:', error);
       alert('Error de red al crear reserva recurrente');
     }
   };
 
-  const updateRecurringBooking = async (id: string, field: keyof RecurringBooking, value: any) => {
+  const updateRecurringBooking = async (
+    id: string,
+    field: keyof RecurringBooking,
+    value: string | number | boolean,
+  ) => {
     try {
       const res = await fetch('/api/recurring-bookings', {
         method: 'PATCH',
@@ -276,8 +283,8 @@ export default function RecurringBookingsPage() {
         const data = await res.json();
         alert(`Error al actualizar reserva recurrente: ${data.error}`);
       }
-    } catch (err) {
-      alert('Error de red al actualizar reserva recurrente');
+    } catch (error: unknown) {
+      console.error('Error updating recurring booking:', error);
     }
   };
 
@@ -293,13 +300,13 @@ export default function RecurringBookingsPage() {
 
       if (res.ok) {
         alert('Reserva recurrente eliminada exitosamente');
-        fetchRecurringBookings();
+        await fetchRecurringBookings();
       } else {
         const data = await res.json();
         alert(`Error al eliminar reserva recurrente: ${data.error}`);
       }
-    } catch (err) {
-      alert('Error de red al eliminar reserva recurrente');
+    } catch (error: unknown) {
+      console.error('Error deleting recurring booking:', error);
     }
   };
 

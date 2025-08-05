@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useState, useEffect, useCallback, use } from 'react';
 import { useUser } from '@/context/UserContext';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, RotateCcw } from 'lucide-react';
@@ -46,13 +46,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     }
   }, [user, loading, userId, router]);
 
-  useEffect(() => {
-    if (user && user.id === userId) {
-      fetchUserBookings();
-    }
-  }, [user, userId]);
-
-  const fetchUserBookings = async () => {
+  const fetchUserBookings = useCallback(async () => {
     try {
       setLoadingBookings(true);
       const response = await fetch(`/api/user-bookings?userId=${user?.id}`);
@@ -64,13 +58,19 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
       const data = await response.json();
       setBookings(data.bookings);
       setRecurringBookings(data.recurringBookings);
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error fetching bookings:', error);
       setError('Error al cargar las reservas');
-      console.error('Error fetching bookings:', err);
     } finally {
       setLoadingBookings(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user && user.id === userId) {
+      fetchUserBookings();
+    }
+  }, [user, userId, fetchUserBookings]);
 
   const getStatusIcon = (booking: Booking) => {
     if (booking.cancelled) {

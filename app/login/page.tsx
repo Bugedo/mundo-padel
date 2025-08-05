@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { User, Mail, Phone, UserCheck, Key } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-import { LogIn, User, Mail, Phone, UserCheck, Key } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export default function LoginPage() {
       const fullPhone = `${countryCode}${phone}`;
 
       // REGISTER user
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -121,7 +121,8 @@ export default function LoginPage() {
           router.push('/');
         }, 2000);
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error verifying code:', error);
       setMessage('❌ Error al verificar el código');
     } finally {
       setVerifying(false);

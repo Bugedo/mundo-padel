@@ -127,7 +127,8 @@ export default function UsersPage() {
         const data = await res.json();
         alert(`Error al eliminar usuario: ${data.error}`);
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error deleting user:', error);
       alert('Error de red al eliminar usuario');
     }
   };
@@ -167,7 +168,8 @@ export default function UsersPage() {
         const data = await res.json();
         alert(`Error al actualizar usuario: ${data.error}`);
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Error updating user:', error);
       alert('Error de red al actualizar usuario');
     }
   };

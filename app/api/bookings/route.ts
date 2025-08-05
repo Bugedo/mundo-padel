@@ -201,7 +201,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (error: unknown) {
+    console.error('Error in POST bookings:', error);
     return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
   }
 }
@@ -234,13 +235,8 @@ export async function PATCH(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (error: unknown) {
+    console.error('Error in PATCH bookings:', error);
     return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
   }
-}
-
-// Helper function to get day name
-function getDayName(dayNumber: number): string {
-  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-  return days[dayNumber] || '';
 }

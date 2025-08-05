@@ -20,31 +20,16 @@ export async function GET(req: Request) {
       .from('bookings')
       .select('*')
       .eq('user_id', userId)
-      .order('date', { ascending: false })
+      .order('date', { ascending: true })
       .order('start_time', { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Get user's recurring bookings
-    const { data: recurringBookings, error: recurringError } = await supabaseAdmin
-      .from('recurring_bookings')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('active', true)
-      .order('day_of_week', { ascending: true })
-      .order('start_time', { ascending: true });
-
-    if (recurringError) {
-      return NextResponse.json({ error: recurringError.message }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      bookings: bookings || [],
-      recurringBookings: recurringBookings || [],
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(bookings);
+  } catch (error: unknown) {
+    console.error('Error in GET user-bookings:', error);
+    return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
   }
 }
