@@ -132,7 +132,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
         month: 'long',
         day: 'numeric',
       });
-    } catch (error) {
+    } catch {
       return 'Fecha inválida';
     }
   };
@@ -146,7 +146,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (!timeString) return 'Hora no disponible';
     try {
       return timeString.substring(0, 5); // Remove seconds, keep only HH:MM
-    } catch (error) {
+    } catch {
       return 'Hora inválida';
     }
   };
@@ -155,7 +155,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (!booking.expires_at) return false;
     try {
       return new Date(booking.expires_at) < new Date();
-    } catch (error) {
+    } catch {
       return false;
     }
   };
@@ -236,7 +236,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
                           {(() => {
                             try {
                               return new Date(booking.expires_at).toLocaleString('es-ES');
-                            } catch (error) {
+                            } catch {
                               return 'fecha no disponible';
                             }
                           })()}
