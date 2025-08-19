@@ -343,12 +343,14 @@ export default function Turnero() {
             return (
               <div
                 key={start}
-                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors cursor-pointer ${
+                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors cursor-pointer border-2 ${
                   fullyReserved
-                    ? 'bg-red-500 text-white'
+                    ? 'bg-red-500 text-white border-red-600'
                     : highlighted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-white text-black'
+                      ? 'bg-green-500 text-white border-green-600'
+                      : selectedSlot === start
+                        ? 'bg-blue-500 text-white border-blue-600'
+                        : 'bg-white text-black border-gray-300'
                 }`}
                 onMouseEnter={() => {
                   if (!fullyReserved && !outsideLimit && canFit) setHoverSlot(start);
@@ -365,15 +367,33 @@ export default function Turnero() {
         </div>
       </div>
 
-      {/* Confirm button */}
+      {/* Selected slot info and confirm button */}
       {selectedSlot && user && !loading && (
-        <div className="flex justify-center mt-6">
-          <button
-            onClick={createBooking}
-            className="bg-green-600 px-6 py-2 rounded text-white hover:bg-green-700"
-          >
-            Confirmar reserva
-          </button>
+        <div className="mt-6 mb-6 space-y-4">
+          <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-blue-800 font-medium">
+              Horario seleccionado: <span className="font-bold">{selectedSlot}</span>
+            </p>
+            <p className="text-blue-600 text-sm">
+              Duración: {duration} minutos
+            </p>
+          </div>
+          
+          <div className="flex justify-center">
+            <button
+              onClick={createBooking}
+              className="bg-green-600 px-8 py-3 rounded-lg text-white hover:bg-green-700 font-semibold text-lg shadow-lg transition-colors w-full max-w-xs"
+            >
+              ✅ Confirmar reserva
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Debug info for mobile */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-xs text-gray-400 mt-2 p-2 bg-gray-800 rounded">
+          Debug: selectedSlot={selectedSlot ? 'true' : 'false'}, user={user ? 'true' : 'false'}, loading={loading ? 'true' : 'false'}
         </div>
       )}
 
