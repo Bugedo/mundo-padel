@@ -22,7 +22,7 @@ export async function GET() {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
     try {
-      const { data, error } = await supabase.from('profiles').select('count').limit(1);
+      const { error } = await supabase.from('profiles').select('count').limit(1);
       
       if (error) {
         return NextResponse.json({
