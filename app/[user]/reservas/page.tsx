@@ -49,18 +49,29 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
   const fetchUserBookings = useCallback(async () => {
     try {
       setLoadingBookings(true);
-      const response = await fetch(`/api/user-bookings?userId=${user?.id}`);
+      setError('');
+      
+      if (!user?.id) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const response = await fetch(`/api/user-bookings?userId=${user.id}`);
 
       if (!response.ok) {
         throw new Error('Error al cargar las reservas');
       }
 
       const data = await response.json();
-      setBookings(data.bookings);
-      setRecurringBookings(data.recurringBookings);
+      
+      // Ensure we have arrays even if the API returns null/undefined
+      setBookings(Array.isArray(data.bookings) ? data.bookings : []);
+      setRecurringBookings(Array.isArray(data.recurringBookings) ? data.recurringBookings : []);
     } catch (error: unknown) {
       console.error('Error fetching bookings:', error);
       setError('Error al cargar las reservas');
+      // Set empty arrays to prevent undefined errors
+      setBookings([]);
+      setRecurringBookings([]);
     } finally {
       setLoadingBookings(false);
     }
@@ -112,13 +123,18 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    if (!dateString) return 'Fecha no disponible';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch (error) {
+      return 'Fecha inválida';
+    }
   };
 
   const getDayName = (dayNumber: number) => {
@@ -127,11 +143,21 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
   };
 
   const formatTime = (timeString: string) => {
-    return timeString.substring(0, 5); // Remove seconds, keep only HH:MM
+    if (!timeString) return 'Hora no disponible';
+    try {
+      return timeString.substring(0, 5); // Remove seconds, keep only HH:MM
+    } catch (error) {
+      return 'Hora inválida';
+    }
   };
 
   const isExpired = (booking: Booking) => {
-    return booking.expires_at && new Date(booking.expires_at) < new Date();
+    if (!booking.expires_at) return false;
+    try {
+      return new Date(booking.expires_at) < new Date();
+    } catch (error) {
+      return false;
+    }
   };
 
   if (loading || loadingBookings) {
@@ -168,7 +194,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
           <div className="mb-8">
             <h2 className="text-2xl font-semibold text-neutral mb-4">Reservas Individuales</h2>
 
-            {bookings.length === 0 ? (
+            {!bookings || bookings.length === 0 ? (
               <div className="bg-surface border border-muted rounded-lg p-8 text-center">
                 <Calendar size={48} className="mx-auto text-neutral mb-4" />
                 <p className="text-neutral text-lg">No tienes reservas individuales</p>
@@ -176,7 +202,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
               </div>
             ) : (
               <div className="space-y-4">
-                {bookings.map((booking) => (
+                {(bookings || []).map((booking) => (
                   <div
                     key={booking.id}
                     className="bg-surface border border-muted rounded-lg p-6 hover:shadow-md transition"
@@ -193,12 +219,12 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div className="flex items-center gap-2">
                         <Calendar size={16} className="text-neutral" />
-                        <span className="text-neutral">{formatDate(booking.date)}</span>
+                        <span className="text-neutral">{formatDate(booking.date || '')}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock size={16} className="text-neutral" />
                         <span className="text-neutral">
-                          {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+                          {formatTime(booking.start_time || '')} - {formatTime(booking.end_time || '')}
                         </span>
                       </div>
                     </div>
@@ -207,7 +233,13 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
                       <div className="bg-warning/10 border border-warning rounded p-3">
                         <p className="text-warning text-sm">
                           ⏰ Esta reserva expira el{' '}
-                          {new Date(booking.expires_at).toLocaleString('es-ES')}
+                          {(() => {
+                            try {
+                              return new Date(booking.expires_at).toLocaleString('es-ES');
+                            } catch (error) {
+                              return 'fecha no disponible';
+                            }
+                          })()}
                         </p>
                       </div>
                     )}
@@ -229,7 +261,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
           <div>
             <h2 className="text-2xl font-semibold text-neutral mb-4">Reservas Recurrentes</h2>
 
-            {recurringBookings.length === 0 ? (
+            {!recurringBookings || recurringBookings.length === 0 ? (
               <div className="bg-surface border border-muted rounded-lg p-8 text-center">
                 <RotateCcw size={48} className="mx-auto text-neutral mb-4" />
                 <p className="text-neutral text-lg">No tienes reservas recurrentes</p>
@@ -237,7 +269,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
               </div>
             ) : (
               <div className="space-y-4">
-                {recurringBookings.map((booking) => (
+                {(recurringBookings || []).map((booking) => (
                   <div
                     key={booking.id}
                     className="bg-surface border border-muted rounded-lg p-6 hover:shadow-md transition"
@@ -252,12 +284,12 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center gap-2">
                         <Calendar size={16} className="text-neutral" />
-                        <span className="text-neutral">{getDayName(booking.day_of_week)}s</span>
+                        <span className="text-neutral">{getDayName(booking.day_of_week || 0)}s</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock size={16} className="text-neutral" />
                         <span className="text-neutral">
-                          {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+                          {formatTime(booking.start_time || '')} - {formatTime(booking.end_time || '')}
                         </span>
                       </div>
                     </div>

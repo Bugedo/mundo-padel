@@ -53,7 +53,16 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setMessage(`❌ ${error.message}`);
+        // Handle specific error types
+        if (error.message.includes('429') || error.message.includes('Too many requests')) {
+          setMessage(
+            '❌ Demasiados intentos. Por favor espera unos minutos antes de intentar nuevamente.',
+          );
+        } else if (error.message.includes('Email not confirmed')) {
+          setMessage('❌ Por favor verifica tu email antes de continuar.');
+        } else {
+          setMessage(`❌ ${error.message}`);
+        }
       } else {
         setShowVerificationModal(true);
         setMessage('');
@@ -66,7 +75,16 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setMessage(`❌ ${error.message}`);
+        // Handle specific error types
+        if (error.message.includes('429') || error.message.includes('Too many requests')) {
+          setMessage(
+            '❌ Demasiados intentos de login. Por favor espera unos minutos antes de intentar nuevamente.',
+          );
+        } else if (error.message.includes('Invalid login credentials')) {
+          setMessage('❌ Email o contraseña incorrectos.');
+        } else {
+          setMessage(`❌ ${error.message}`);
+        }
       } else {
         router.push('/'); // Redirect after login
       }
