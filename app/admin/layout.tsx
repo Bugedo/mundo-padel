@@ -1,25 +1,32 @@
 'use client';
 
 import { useUser } from '@/context/UserContext';
-import { redirect } from 'next/navigation';
-import { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { ReactNode, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useUser();
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        router.push('/login');
+      } else if (user.role !== 'admin') {
+        router.push('/');
+      }
+    }
+  }, [user, loading, router]);
 
   if (loading) {
     return <div className="p-8 bg-background text-neutral">Cargando...</div>;
   }
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  if (user.role !== 'admin') {
-    redirect('/');
+  if (!user || user.role !== 'admin') {
+    return <div className="p-8 bg-background text-neutral">Redirigiendo...</div>;
   }
 
   const navItems = [

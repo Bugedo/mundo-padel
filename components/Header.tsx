@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useUser } from '@/context/UserContext';
 import { LogIn, User, Calendar } from 'lucide-react';
 import LogoutButton from '@/components/LogoutButton';
@@ -9,10 +9,27 @@ import LogoutButton from '@/components/LogoutButton';
 export default function Header() {
   const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
   }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
 
   if (loading) {
     return (
@@ -43,7 +60,7 @@ export default function Header() {
               Iniciar sesión
             </Link>
           ) : (
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center gap-1 text-primary hover:text-accent transition"

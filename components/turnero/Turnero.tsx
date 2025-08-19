@@ -85,8 +85,8 @@ export default function Turnero() {
   const fetchBookings = useCallback(async () => {
     const dateString = formatDate(selectedDate);
 
-    // Use admin client to see all bookings including pending ones
-    const response = await fetch(`/api/bookings?date=${dateString}`, {
+    // Use public endpoint to get bookings for the date
+    const response = await fetch(`/api/public-bookings?date=${dateString}`, {
       cache: 'no-store',
     });
 

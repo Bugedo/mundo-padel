@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Mail, Phone, UserCheck, Key } from 'lucide-react';
+import { User, Mail, Phone, UserCheck } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 
 export default function LoginPage() {
@@ -16,8 +16,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verifying, setVerifying] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,31 +39,43 @@ export default function LoginPage() {
       const fullPhone = `${countryCode}${phone}`;
 
       // REGISTER user
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone: fullPhone,
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              phone: fullPhone,
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        // Handle specific error types
-        if (error.message.includes('429') || error.message.includes('Too many requests')) {
-          setMessage(
-            '❌ Demasiados intentos. Por favor espera unos minutos antes de intentar nuevamente.',
-          );
-        } else if (error.message.includes('Email not confirmed')) {
-          setMessage('❌ Por favor verifica tu email antes de continuar.');
+        if (error) {
+          console.error('Signup error:', error);
+          // Handle specific error types
+          if (error.message.includes('429') || error.message.includes('Too many requests')) {
+            setMessage(
+              '❌ Demasiados intentos. Por favor espera unos minutos antes de intentar nuevamente.',
+            );
+          } else if (error.message.includes('Email not confirmed')) {
+            setMessage('❌ Por favor verifica tu email antes de continuar.');
+          } else if (
+            error.message.includes('500') ||
+            error.message.includes('Internal server error')
+          ) {
+            setMessage('❌ Error del servidor. Por favor intenta nuevamente en unos minutos.');
+          } else {
+            setMessage(`❌ ${error.message}`);
+          }
         } else {
-          setMessage(`❌ ${error.message}`);
+          console.log('Signup successful:', data);
+          setShowVerificationModal(true);
+          setMessage('');
         }
-      } else {
-        setShowVerificationModal(true);
-        setMessage('');
+      } catch (signupError) {
+        console.error('Signup exception:', signupError);
+        setMessage('❌ Error inesperado durante el registro. Por favor intenta nuevamente.');
       }
     } else {
       // LOGIN user
@@ -111,40 +121,6 @@ export default function LoginPage() {
     setFullName('');
     setPhone('');
     setMessage('');
-    setVerificationCode('');
-  };
-
-  const handleVerifyCode = async () => {
-    if (!verificationCode.trim()) {
-      setMessage('❌ Por favor ingresa el código de verificación');
-      return;
-    }
-
-    setVerifying(true);
-    setMessage('');
-
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token: verificationCode,
-        type: 'signup',
-      });
-
-      if (error) {
-        setMessage(`❌ ${error.message}`);
-      } else {
-        setMessage('✅ ¡Cuenta verificada exitosamente!');
-        setTimeout(() => {
-          handleCloseVerificationModal();
-          router.push('/');
-        }, 2000);
-      }
-    } catch (error: unknown) {
-      console.error('Error verifying code:', error);
-      setMessage('❌ Error al verificar el código');
-    } finally {
-      setVerifying(false);
-    }
   };
 
   return (
@@ -280,47 +256,63 @@ export default function LoginPage() {
             <div className="text-center">
               <UserCheck size={48} className="mx-auto text-success mb-4" />
               <h2 className="text-xl font-bold mb-2 text-neutral">¡Cuenta creada exitosamente!</h2>
-              <p className="text-neutral mb-4">
-                Te hemos enviado un código de verificación a <strong>{email}</strong>
-              </p>
-              <p className="text-sm text-neutral mb-6">
-                Por favor revisa tu bandeja de entrada e ingresa el código de 6 dígitos que
-                recibiste.
-              </p>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2 text-neutral">
-                  Código de verificación
-                </label>
-                <div className="flex items-center gap-2">
-                  <Key size={16} className="text-muted" />
-                  <input
-                    type="text"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    placeholder="123456"
-                    maxLength={6}
-                    className="flex-1 border border-muted rounded px-3 py-2 bg-surface text-neutral text-center text-lg tracking-widest"
-                    style={{ letterSpacing: '0.5em' }}
-                  />
-                </div>
+              <div className="bg-primary/10 border border-primary rounded-lg p-4 mb-4">
+                <p className="text-neutral mb-2">
+                  📧 <strong>Verificación por email enviada</strong>
+                </p>
+                <p className="text-sm text-neutral">Hemos enviado un email de verificación a:</p>
+                <p className="text-sm font-medium text-primary mt-1">{email}</p>
               </div>
 
-              {message && <p className="text-center text-sm text-neutral mb-4">{message}</p>}
+              <div className="text-left bg-surface border border-muted rounded-lg p-4 mb-4">
+                <h3 className="font-semibold text-neutral mb-2">
+                  📋 Pasos para verificar tu cuenta:
+                </h3>
+                <ol className="text-sm text-neutral space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>Revisa tu bandeja de entrada (y carpeta de spam)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>Haz clic en el enlace de verificación del email</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>Serás redirigido automáticamente al sitio</span>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="bg-warning/10 border border-warning rounded-lg p-3 mb-4">
+                <p className="text-sm text-warning">
+                  ⏰ <strong>Importante:</strong> El enlace de verificación expira en 24 horas
+                </p>
+              </div>
 
               <div className="flex gap-3">
                 <button
-                  onClick={handleVerifyCode}
-                  disabled={verifying || !verificationCode.trim()}
-                  className="flex-1 bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:opacity-50"
+                  onClick={handleCloseVerificationModal}
+                  className="flex-1 bg-primary text-light px-4 py-2 rounded hover:bg-primary/80"
                 >
-                  {verifying ? 'Verificando...' : 'Verificar'}
+                  Entendido
                 </button>
                 <button
-                  onClick={handleCloseVerificationModal}
+                  onClick={() => {
+                    setShowVerificationModal(false);
+                    setIsRegister(false);
+                    setMessage('');
+                  }}
                   className="bg-accent text-neutral px-4 py-2 rounded hover:bg-accent-hover"
                 >
-                  Cancelar
+                  Ir al Login
                 </button>
               </div>
             </div>
