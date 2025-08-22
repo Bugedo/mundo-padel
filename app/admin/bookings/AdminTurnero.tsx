@@ -17,6 +17,7 @@ interface Booking {
   expires_at?: string;
   is_recurring?: boolean;
   recurring_booking_id?: string;
+  comment?: string;
   user?: {
     full_name: string;
     email: string;
@@ -88,6 +89,10 @@ export default function AdminTurnero({
   const [filteredUsers, setFilteredUsers] = useState<
     { id: string; full_name: string; email: string }[]
   >([]);
+
+  // Comment editing state
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [commentValue, setCommentValue] = useState('');
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
@@ -254,6 +259,46 @@ export default function AdminTurnero({
     alert(
       `Editar reserva de ${booking.user?.full_name || 'usuario'} - ${booking.start_time} a ${booking.end_time}`,
     );
+  };
+
+  const handleCommentEdit = (booking: Booking) => {
+    setEditingComment(booking.id);
+    setCommentValue(booking.comment || '');
+  };
+
+  const handleCommentSave = async (booking: Booking) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: booking.id,
+          updates: {
+            comment: commentValue,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        setBookings((prevBookings) =>
+          prevBookings.map((b) => (b.id === booking.id ? { ...b, comment: commentValue } : b)),
+        );
+        setEditingComment(null);
+        setCommentValue('');
+      } else {
+        const errorData = await response.json();
+        alert(`Error al actualizar el comentario: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      alert('Error al actualizar el comentario');
+    }
+  };
+
+  const handleCommentCancel = () => {
+    setEditingComment(null);
+    setCommentValue('');
   };
 
   // Check if a slot can fit the selected duration for a specific court
@@ -457,7 +502,7 @@ export default function AdminTurnero({
                   return (
                     <div
                       key={`slot-${court}-${start}`}
-                      className="h-12 bg-gray-100 border border-gray-200 rounded flex items-center justify-center text-gray-400 text-sm mb-2"
+                      className="h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center text-gray-400 text-sm mb-2"
                     >
                       {start} - {end}
                     </div>
@@ -467,7 +512,7 @@ export default function AdminTurnero({
                   return (
                     <div
                       key={`slot-${court}-${start}`}
-                      className={`h-12 border rounded flex items-center justify-center text-sm mb-2 cursor-pointer transition-colors ${
+                      className={`h-16 border rounded flex items-center justify-center text-sm mb-2 cursor-pointer transition-colors ${
                         highlighted
                           ? 'bg-green-500 text-white border-green-600'
                           : selectedSlot === start
@@ -509,8 +554,8 @@ export default function AdminTurnero({
                   if (slotIndex === -1) return null;
 
                   const durationInSlots = Math.ceil(booking.duration_minutes / 30);
-                  const topPosition = slotIndex * 56; // 48px height + 8px margin
-                  const height = durationInSlots * 48 + (durationInSlots - 1) * 8;
+                  const topPosition = slotIndex * 72; // 64px height + 8px margin
+                  const height = durationInSlots * 64 + (durationInSlots - 1) * 8;
 
                   const remaining = timeLeft[booking.id] || 0;
                   const minutes = Math.floor(remaining / 60);
@@ -551,6 +596,49 @@ export default function AdminTurnero({
                           {booking.start_time} - {booking.end_time} ({booking.duration_minutes} min)
                         </div>
                         <div className="text-xs font-medium">{getBookingStatus(booking)}</div>
+                      </div>
+
+                      {/* Comment input */}
+                      <div className="mt-2">
+                        {editingComment === booking.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={commentValue}
+                              onChange={(e) => setCommentValue(e.target.value)}
+                              placeholder="Comentarios"
+                              className="w-full text-xs bg-white/10 border border-white/20 rounded px-2 py-1 text-white placeholder-white/60 resize-none"
+                              rows={3}
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleCommentSave(booking)}
+                                className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={handleCommentCancel}
+                                className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => handleCommentEdit(booking)}
+                            className="cursor-pointer"
+                          >
+                            {booking.comment ? (
+                              <div className="text-xs opacity-75 italic whitespace-pre-wrap">
+                                {booking.comment}
+                              </div>
+                            ) : (
+                              <div className="text-xs opacity-50 italic">Comentarios</div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Action buttons */}
