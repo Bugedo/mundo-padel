@@ -24,7 +24,7 @@ interface Booking {
 
 export default function BookingsAdminPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   const formatDate = (date: Date) => date.toISOString().split('T')[0];

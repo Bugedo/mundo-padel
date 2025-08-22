@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Booking {
   id: string;
@@ -183,9 +183,10 @@ export default function AdminTurnero({
   };
 
   const getBookingStatus = (booking: Booking) => {
-    if (booking.cancelled) return 'Ausente';
-    if (booking.present) return 'Presente';
-    if (booking.confirmed) return 'Confirmada';
+    if (booking.is_recurring) return 'Recurrente';
+    if (booking.cancelled) return 'Anulada';
+    if (booking.present) return 'Confirmada';
+    if (booking.confirmed) return 'Aceptada';
     return 'Pendiente';
   };
 
@@ -207,14 +208,26 @@ export default function AdminTurnero({
 
   const handleBookingAction = async (
     booking: Booking,
-    action: 'confirm' | 'cancel' | 'present' | 'unpresent' | 'absent' | 'restore' | 'delete',
+    action:
+      | 'accept'
+      | 'confirm'
+      | 'cancel'
+      | 'present'
+      | 'unpresent'
+      | 'absent'
+      | 'restore'
+      | 'delete',
   ) => {
     let field: keyof Booking;
     let value: boolean;
 
     switch (action) {
-      case 'confirm':
+      case 'accept':
         field = 'confirmed';
+        value = true;
+        break;
+      case 'confirm':
+        field = 'present';
         value = true;
         break;
       case 'cancel':
@@ -487,7 +500,7 @@ export default function AdminTurnero({
 
             <div className="relative">
               {/* Render all slots first */}
-              {slots.map(({ start, end }, index) => {
+              {slots.map(({ start, end }) => {
                 const booking = getBookingForSlot(court, start);
                 const isStartOfBooking = booking && booking.start_time === start;
                 const highlighted = isHighlighted(start, court);
@@ -646,32 +659,32 @@ export default function AdminTurnero({
                         {!booking.confirmed && !booking.cancelled && (
                           <>
                             <button
-                              onClick={() => handleBookingAction(booking, 'confirm')}
+                              onClick={() => handleBookingAction(booking, 'accept')}
                               className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              ✓
+                              Aceptar
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'cancel')}
                               className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              ✕
+                              Rechazar
                             </button>
                           </>
                         )}
                         {booking.confirmed && !booking.present && (
                           <>
                             <button
-                              onClick={() => handleBookingAction(booking, 'present')}
+                              onClick={() => handleBookingAction(booking, 'confirm')}
                               className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              Presente
+                              Confirmada
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'absent')}
                               className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              Ausente
+                              Cancelada
                             </button>
                           </>
                         )}
@@ -679,22 +692,22 @@ export default function AdminTurnero({
                           <>
                             <button
                               onClick={() => handleBookingAction(booking, 'unpresent')}
-                              className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              Presente
+                              Confirmada
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'absent')}
                               className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-xs font-medium"
                             >
-                              Ausente
+                              Cancelada
                             </button>
                           </>
                         )}
                         {!booking.is_recurring && (
                           <button
                             onClick={() => handleEditBooking(booking)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-medium"
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs font-medium"
                           >
                             Editar
                           </button>
@@ -723,15 +736,15 @@ export default function AdminTurnero({
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-blue-600 rounded"></div>
-            <span className="text-neutral">Confirmada</span>
+            <span className="text-neutral">Aceptada</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-500 rounded"></div>
-            <span className="text-neutral">Presente</span>
+            <span className="text-neutral">Confirmada</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-orange-500 rounded"></div>
-            <span className="text-neutral">Ausente</span>
+            <span className="text-neutral">Cancelada</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-purple-500 rounded"></div>

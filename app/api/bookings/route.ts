@@ -84,7 +84,7 @@ async function generateRecurringBookingsForDate(date: string) {
     // If no booking exists and the recurring booking should be active on this date
     if (shouldBeActive) {
       // Create the booking
-      const { data: newBooking, error: insertError } = await supabaseAdmin
+      const { error: insertError } = await supabaseAdmin
         .from('bookings')
         .insert({
           user_id: recurring.user_id,
@@ -111,7 +111,10 @@ async function generateRecurringBookingsForDate(date: string) {
 }
 
 // Helper function to check if a recurring booking should be active on a specific date
-function shouldRecurringBookingBeActive(recurring: any, date: string): boolean {
+function shouldRecurringBookingBeActive(
+  recurring: { start_date?: string; end_date?: string },
+  date: string,
+): boolean {
   const dateObj = new Date(date);
   const startDate = recurring.start_date ? new Date(recurring.start_date) : null;
   const endDate = recurring.end_date ? new Date(recurring.end_date) : null;
@@ -235,7 +238,7 @@ export async function POST(req: Request) {
       confirmed: confirmed !== undefined ? confirmed : false,
       present: false,
       cancelled: false,
-      expires_at: confirmed ? null : new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      expires_at: null, // No timer - bookings stay pending until admin accepts
       created_by: user_id, // Add the required created_by field
     };
 
@@ -270,7 +273,7 @@ export async function PATCH(req: Request) {
 
     if (updates) {
       // This is an edit update (from the edit modal or comment update)
-      const { start_time, end_time, duration_minutes, court, comment } = updates;
+      const { start_time, end_time, duration_minutes, court } = updates;
 
       // Validate the updates
       if (start_time && !/^\d{2}:\d{2}$/.test(start_time)) {

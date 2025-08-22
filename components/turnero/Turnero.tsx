@@ -374,11 +374,9 @@ export default function Turnero() {
             <p className="text-blue-800 font-medium">
               Horario seleccionado: <span className="font-bold">{selectedSlot}</span>
             </p>
-            <p className="text-blue-600 text-sm">
-              Duración: {duration} minutos
-            </p>
+            <p className="text-blue-600 text-sm">Duración: {duration} minutos</p>
           </div>
-          
+
           <div className="flex justify-center">
             <button
               onClick={createBooking}
@@ -393,47 +391,22 @@ export default function Turnero() {
       {/* Debug info for mobile */}
       {process.env.NODE_ENV === 'development' && (
         <div className="text-xs text-gray-400 mt-2 p-2 bg-gray-800 rounded">
-          Debug: selectedSlot={selectedSlot ? 'true' : 'false'}, user={user ? 'true' : 'false'}, loading={loading ? 'true' : 'false'}
+          Debug: selectedSlot={selectedSlot ? 'true' : 'false'}, user={user ? 'true' : 'false'},
+          loading={loading ? 'true' : 'false'}
         </div>
       )}
 
-      {/* Pending booking timer */}
-      {pendingBooking && (
-        <BookingPending booking={pendingBooking} onExpire={() => setPendingBooking(null)} />
-      )}
+      {/* Pending booking notification */}
+      {pendingBooking && <BookingPending booking={pendingBooking} />}
     </section>
   );
 }
 
-function BookingPending({ booking, onExpire }: { booking: PendingBooking; onExpire: () => void }) {
-  const [remaining, setRemaining] = useState(0);
-
-  useEffect(() => {
-    const expires = new Date(booking.expires_at).getTime();
-
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((expires - now) / 1000));
-      setRemaining(diff);
-
-      if (diff <= 0) {
-        clearInterval(interval);
-        onExpire();
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [booking.expires_at, onExpire]);
-
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
-
+function BookingPending({}: { booking: PendingBooking }) {
   return (
     <div className="mt-4 bg-yellow-100 p-4 rounded text-black text-center">
-      <p className="mb-2">Para confirmar tu reserva, contáctanos para pagar el depósito.</p>
-      <p className="font-bold">
-        Tiempo restante: {minutes}:{seconds.toString().padStart(2, '0')}
-      </p>
+      <p className="mb-2">Tu reserva está pendiente de confirmación.</p>
+      <p className="text-sm">Te notificaremos cuando sea aceptada.</p>
     </div>
   );
 }
