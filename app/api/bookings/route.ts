@@ -18,65 +18,123 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
 
-  // Get regular bookings
-  const query = supabaseAdmin
-    .from('bookings')
-    .select('*, user:profiles!bookings_user_id_fkey(full_name)')
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true });
-
-  if (date) query.eq('date', date);
-
-  const { data: regularBookings, error } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!date) {
+    return NextResponse.json({ error: 'Date parameter is required' }, { status: 400 });
   }
 
-  // If we have a specific date, also get recurring bookings for that day
-  if (date) {
-    const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay(); // 0-6 (Sunday-Saturday)
+  try {
+    // First, ensure all recurring bookings are generated for this date
+    await generateRecurringBookingsForDate(date);
 
-    const { data: recurringBookings, error: recurringError } = await supabaseAdmin
-      .from('recurring_bookings')
-      .select('*, user:profiles!recurring_bookings_user_id_fkey(full_name)')
-      .eq('day_of_week', dayOfWeek)
-      .eq('active', true);
+    // Then get all bookings for this date (including generated recurring ones)
+    const { data: bookings, error } = await supabaseAdmin
+      .from('bookings')
+      .select('*, user:profiles!bookings_user_id_fkey(full_name, email, phone)')
+      .eq('date', date)
+      .order('start_time', { ascending: true });
 
-    if (!recurringError && recurringBookings) {
-      // Convert recurring bookings to regular booking format for the specific date
-      const recurringBookingsForDate = recurringBookings.map((recurring) => ({
-        id: `recurring-${recurring.id}`,
-        user_id: recurring.user_id,
-        court: recurring.court,
-        date: date,
-        start_time: recurring.start_time,
-        end_time: recurring.end_time,
-        duration_minutes: recurring.duration_minutes,
-        confirmed: true,
-        present: false,
-        cancelled: false,
-        is_recurring: true,
-        recurring_booking_id: recurring.id,
-        user: recurring.user,
-      }));
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-      // Combine regular and recurring bookings
-      const allBookings = [...(regularBookings || []), ...recurringBookingsForDate];
-      return NextResponse.json(allBookings);
+    return NextResponse.json(bookings || []);
+  } catch (error) {
+    console.error('Error in GET bookings:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// Helper function to generate recurring bookings for a specific date
+async function generateRecurringBookingsForDate(date: string) {
+  const dateObj = new Date(date);
+  const dayOfWeek = dateObj.getDay(); // 0-6 (Sunday-Saturday)
+
+  // Get all active recurring bookings for this day of week
+  const { data: recurringBookings, error: recurringError } = await supabaseAdmin
+    .from('recurring_bookings')
+    .select('*')
+    .eq('day_of_week', dayOfWeek)
+    .eq('active', true);
+
+  if (recurringError) {
+    console.error('Error fetching recurring bookings:', recurringError);
+    return;
+  }
+
+  if (!recurringBookings || recurringBookings.length === 0) {
+    return;
+  }
+
+  // For each recurring booking, check if it should be active on this date
+  for (const recurring of recurringBookings) {
+    // Check if there's already a booking for this recurring booking on this date
+    const { data: existingBooking } = await supabaseAdmin
+      .from('bookings')
+      .select('id')
+      .eq('date', date)
+      .eq('recurring_booking_id', recurring.id)
+      .single();
+
+    if (existingBooking) {
+      continue;
+    }
+
+    const shouldBeActive = shouldRecurringBookingBeActive(recurring, date);
+
+    // If no booking exists and the recurring booking should be active on this date
+    if (shouldBeActive) {
+      // Create the booking
+      const { data: newBooking, error: insertError } = await supabaseAdmin
+        .from('bookings')
+        .insert({
+          user_id: recurring.user_id,
+          court: recurring.court,
+          date: date,
+          start_time: recurring.start_time,
+          end_time: recurring.end_time,
+          duration_minutes: recurring.duration_minutes,
+          confirmed: true,
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          recurring_booking_id: recurring.id,
+          created_by: recurring.user_id, // Add the required created_by field
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error(`Error creating booking for recurring ${recurring.id}:`, insertError);
+      }
     }
   }
+}
 
-  return NextResponse.json(regularBookings);
+// Helper function to check if a recurring booking should be active on a specific date
+function shouldRecurringBookingBeActive(recurring: any, date: string): boolean {
+  const dateObj = new Date(date);
+  const startDate = recurring.start_date ? new Date(recurring.start_date) : null;
+  const endDate = recurring.end_date ? new Date(recurring.end_date) : null;
+
+  // If start_date is set, check if the date is after or equal to start_date
+  if (startDate && dateObj < startDate) {
+    return false;
+  }
+
+  // If end_date is set, check if the date is before or equal to end_date
+  if (endDate && dateObj > endDate) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { user_id, date, start_time, end_time, duration_minutes, confirmed } = body;
+    const { user_id, date, start_time, end_time, duration_minutes, confirmed, court } = body;
 
-    // Validate required fields (removed court from required fields)
+    // Validate required fields
     if (!user_id || !date || !start_time || !end_time || !duration_minutes) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -117,77 +175,68 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: existingError.message }, { status: 500 });
     }
 
-    // Get all recurring bookings for this day
-    const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay();
+    // Get active bookings that overlap with the requested time slot
+    const overlappingBookings = (existingBookings || []).filter((booking) => {
+      const [bh, bm] = booking.start_time.split(':').map(Number);
+      const [eh, em] = booking.end_time.split(':').map(Number);
+      const bookingStartMinutes = bh * 60 + bm;
+      const bookingEndMinutes = eh * 60 + em;
 
-    const { data: recurringBookings, error: recurringError } = await supabaseAdmin
-      .from('recurring_bookings')
-      .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .eq('active', true);
+      const active =
+        booking.confirmed || (booking.expires_at && new Date(booking.expires_at) > new Date());
 
-    if (recurringError) {
-      return NextResponse.json({ error: recurringError.message }, { status: 500 });
-    }
+      if (!active) return false;
 
-    // Check for conflicts with regular bookings
-    const conflictingRegularBookings = (existingBookings || []).filter((booking) => {
-      const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
-      const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
-      const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
-      const bookingEndMinutes = bookingEndH * 60 + bookingEndM;
-
-      // Check for overlap
+      // Check if the new booking overlaps with this existing booking
       return (
         (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
         (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
       );
     });
 
-    // Check for conflicts with recurring bookings
-    const conflictingRecurringBookings = (recurringBookings || []).filter((booking) => {
-      const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
-      const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
-      const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
-      const bookingEndMinutes = bookingEndH * 60 + bookingEndM;
-
-      // Check for overlap
-      return (
-        (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
-        (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
+    // Determine court assignment
+    let selectedCourt = court;
+    if (!selectedCourt) {
+      // Auto-assign to first available court
+      const occupiedCourts = new Set(
+        overlappingBookings.map((b) => b.court).filter((court) => court !== null),
       );
-    });
 
-    // Get taken courts from both regular and recurring bookings
-    const takenCourtsFromRegular = conflictingRegularBookings.map((b) => b.court);
-    const takenCourtsFromRecurring = conflictingRecurringBookings.map((b) => b.court);
-    const allTakenCourts = [...new Set([...takenCourtsFromRegular, ...takenCourtsFromRecurring])];
+      // Find first available court
+      for (let i = 1; i <= 3; i++) {
+        if (!occupiedCourts.has(i)) {
+          selectedCourt = i;
+          break;
+        }
+      }
 
-    const availableCourt = [1, 2, 3].find((c) => !allTakenCourts.includes(c));
-
-    if (!availableCourt) {
-      return NextResponse.json(
-        {
-          error: 'All courts are occupied in this time slot',
-        },
-        { status: 409 },
-      );
+      if (!selectedCourt) {
+        return NextResponse.json({ error: 'No available courts' }, { status: 409 });
+      }
+    } else {
+      // If court is specified (admin booking), validate it's available
+      const courtOccupied = overlappingBookings.some((booking) => booking.court === selectedCourt);
+      if (courtOccupied) {
+        return NextResponse.json(
+          { error: `Court ${selectedCourt} is already occupied in this time slot` },
+          { status: 409 },
+        );
+      }
     }
 
-    // Create the booking with the automatically assigned court
+    // Create the booking
     const bookingData = {
       user_id,
-      created_by: user_id, // For admin-created bookings, use the same user_id
-      court: availableCourt, // Use the automatically assigned court
+      court: selectedCourt,
       date,
       start_time,
       end_time,
       duration_minutes,
-      confirmed: confirmed || false,
+      confirmed: confirmed !== undefined ? confirmed : false,
       present: false,
       cancelled: false,
       expires_at: confirmed ? null : new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      created_by: user_id, // Add the required created_by field
     };
 
     const { data, error: insertError } = await supabaseAdmin
@@ -220,21 +269,28 @@ export async function PATCH(req: Request) {
     const { id, field, value } = body;
 
     // Validate allowed fields for updates
-    const allowedFields = ['confirmed', 'present', 'cancelled'];
+    const allowedFields = ['confirmed', 'present', 'cancelled', 'absent'];
     if (!allowedFields.includes(field)) {
       return NextResponse.json({ error: 'Invalid field for update' }, { status: 400 });
     }
 
-    const { error: updateError } = await supabaseAdmin
+    // Handle absent field by setting cancelled to true
+    const actualField = field === 'absent' ? 'cancelled' : field;
+    const actualValue = field === 'absent' ? true : value;
+
+    // Update the booking
+    const { data, error: updateError } = await supabaseAdmin
       .from('bookings')
-      .update({ [field]: value })
-      .eq('id', id);
+      .update({ [actualField]: actualValue })
+      .eq('id', id)
+      .select()
+      .single();
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(data);
   } catch (error: unknown) {
     console.error('Error in PATCH bookings:', error);
     return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
