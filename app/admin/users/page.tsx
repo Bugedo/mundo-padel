@@ -251,7 +251,7 @@ export default function UsersPage() {
         <p className="text-error mb-4">Error: {error}</p>
         <button
           onClick={() => fetchUsers(showAllUsers)}
-          className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
+          className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors"
         >
           Reintentar
         </button>
@@ -329,13 +329,13 @@ export default function UsersPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={handleSaveEdit}
-                        className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
+                        className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors"
                       >
                         Guardar
                       </button>
                       <button
                         onClick={handleCancelEdit}
-                        className="bg-muted text-neutral px-4 py-2 rounded hover:bg-accent"
+                        className="bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors"
                       >
                         Cancelar
                       </button>
@@ -361,19 +361,19 @@ export default function UsersPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditUser(user)}
-                    className="bg-accent text-neutral px-3 py-1 rounded hover:bg-accent-hover"
+                    className="bg-accent text-dark px-3 py-1 rounded hover:bg-accent-hover transition-colors"
                   >
                     Editar
                   </button>
                   <button
                     onClick={() => handleToggleBookings(user.id)}
-                    className="bg-primary text-light px-3 py-1 rounded hover:bg-primary-hover"
+                    className="bg-primary text-light px-3 py-1 rounded hover:bg-primary-hover transition-colors"
                   >
                     {expandedUserId === user.id ? 'Ocultar' : 'Ver'} Reservas
                   </button>
                   <button
                     onClick={() => handleDelete(user.id)}
-                    className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
+                    className="bg-error text-light px-3 py-1 rounded hover:bg-error-light transition-colors"
                   >
                     Eliminar
                   </button>

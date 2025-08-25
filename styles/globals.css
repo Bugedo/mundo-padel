@@ -1,20 +1,41 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-background: #0a0a0a;
-  --color-surface: #1a1a1a;
-  --color-muted: #2a2a2a;
-  --color-neutral: #e5e5e5;
+  /* Base colors - Dark theme with brand integration */
+  --color-background: #1a1a1a; /* Dark gray instead of pure black */
+  --color-surface: #2a2a2a; /* Slightly lighter surface */
+  --color-surface-light: #3a3a3a; /* For elevated surfaces */
+  --color-muted: #404040; /* Medium gray for borders and subtle elements */
+  --color-muted-light: #505050; /* Lighter muted for hover states */
+  --color-neutral: #e5e5e5; /* Light gray for text */
+  --color-neutral-muted: #b0b0b0; /* Muted text color */
 
-  --color-primary: #4b5563;
-  --color-primary-hover: #6b7280;
+  /* Brand colors integration */
+  --color-primary: #7a7a7a; /* Brand gray as primary */
+  --color-primary-hover: #8a8a8a; /* Slightly lighter on hover */
+  --color-primary-light: #9a9a9a; /* Light version for highlights */
 
-  --color-accent: #374151;
-  --color-accent-hover: #4b5563;
+  /* Accent colors using brand green */
+  --color-accent: #c1de14; /* Brand green as accent */
+  --color-accent-hover: #d1ee24; /* Brighter on hover */
+  --color-accent-muted: #a1ce04; /* Darker version */
+  --color-accent-light: #e1fe34; /* Light version for highlights */
 
-  --color-error: #dc2626;
-  --color-success: #4b5563;
+  /* Status colors */
+  --color-error: #ef4444; /* Red for errors */
+  --color-error-light: #fca5a5; /* Light red */
+  --color-success: #22c55e; /* Green for success */
+  --color-success-light: #86efac; /* Light green */
+  --color-warning: #f59e0b; /* Orange for warnings */
+  --color-warning-light: #fcd34d; /* Light orange */
 
+  /* Pure brand colors for specific use cases */
+  --color-brand-white: #ffffff;
+  --color-brand-gray: #7a7a7a;
+  --color-brand-black: #000000;
+  --color-brand-green: #c1de14;
+
+  /* Utility colors */
   --color-dark: #000000;
   --color-light: #ffffff;
 }

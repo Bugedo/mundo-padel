@@ -22,11 +22,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, [user, loading, router]);
 
   if (loading) {
-    return <div className="p-8 bg-background text-neutral">Cargando...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-neutral text-lg">Cargando...</div>
+      </div>
+    );
   }
 
   if (!user || user.role !== 'admin') {
-    return <div className="p-8 bg-background text-neutral">Redirigiendo...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-neutral text-lg">Redirigiendo...</div>
+      </div>
+    );
   }
 
   const navItems = [
@@ -37,26 +45,51 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="w-64 bg-surface border-r border-muted flex flex-col">
-        <div className="p-4 text-2xl font-bold border-b border-muted text-neutral">Admin Panel</div>
+      {/* Sidebar */}
+      <aside className="w-64 bg-surface-light border-r border-muted flex flex-col shadow-lg mt-8">
+        {/* Header */}
+        <div className="p-6 border-b border-muted">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
+              <span className="text-dark font-bold text-sm">MP</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-neutral">Admin Panel</h1>
+              <p className="text-sm text-neutral-muted">Mundo Padel</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`block px-3 py-2 rounded transition-colors ${
+              className={`block px-4 py-3 rounded-lg transition-all duration-200 font-medium ${
                 pathname.startsWith(item.href)
-                  ? 'bg-primary text-light'
-                  : 'text-neutral hover:bg-accent hover:text-light'
+                  ? 'bg-accent text-dark shadow-md'
+                  : 'text-neutral hover:bg-muted-light hover:text-light'
               }`}
             >
               {item.name}
             </Link>
           ))}
         </nav>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-muted">
+          <div className="text-sm text-neutral-muted">
+            <p>Usuario: {user.email}</p>
+            <p className="text-xs mt-1">Panel de Administración</p>
+          </div>
+        </div>
       </aside>
 
-      <main className="flex-1 bg-background text-neutral p-6">{children}</main>
+      {/* Main content */}
+      <main className="flex-1 bg-background">
+        <div className="p-6 pt-8">{children}</div>
+      </main>
     </div>
   );
 }

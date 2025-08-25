@@ -78,7 +78,6 @@ export default function AdminTurnero({
 
   // Booking creation state
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
-  const [showDurations, setShowDurations] = useState(false);
   const [hoverSlot, setHoverSlot] = useState<{ court: number; time: string } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<number | null>(null);
@@ -191,19 +190,19 @@ export default function AdminTurnero({
   };
 
   const getStatusColor = (booking: Booking) => {
-    if (booking.is_recurring) return 'bg-purple-500';
+    if (booking.is_recurring) return 'bg-yellow-500';
     if (booking.cancelled) return 'bg-orange-500';
     if (booking.present) return 'bg-green-500';
-    if (booking.confirmed) return 'bg-blue-600';
-    return 'bg-yellow-500';
+    if (booking.confirmed) return 'bg-gray-500';
+    return 'bg-orange-500'; // Pendiente
   };
 
   const getStatusTextColor = (booking: Booking) => {
-    if (booking.is_recurring) return 'text-purple-100';
-    if (booking.cancelled) return 'text-orange-100';
-    if (booking.present) return 'text-green-100';
-    if (booking.confirmed) return 'text-blue-100';
-    return 'text-yellow-100';
+    if (booking.is_recurring) return 'text-dark';
+    if (booking.cancelled) return 'text-dark';
+    if (booking.present) return 'text-dark';
+    if (booking.confirmed) return 'text-dark';
+    return 'text-dark'; // Pendiente
   };
 
   const handleBookingAction = async (
@@ -431,7 +430,7 @@ export default function AdminTurnero({
         <div className="flex items-center gap-4">
           <button
             onClick={() => changeDate(-1)}
-            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
+            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
           >
             ← Día anterior
           </button>
@@ -445,7 +444,7 @@ export default function AdminTurnero({
           </span>
           <button
             onClick={() => changeDate(1)}
-            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
+            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
           >
             Día siguiente →
           </button>
@@ -453,39 +452,33 @@ export default function AdminTurnero({
 
         <div className="flex items-center gap-4">
           {/* Duration selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDurations(!showDurations)}
-              className="bg-accent text-background px-4 py-2 rounded"
-            >
-              {duration} min
-            </button>
-            {showDurations && (
-              <div className="absolute mt-2 bg-surface rounded shadow-lg flex flex-col border border-muted z-20">
-                {[60, 90, 120].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => {
-                      setDuration(d as 60 | 90 | 120);
-                      setShowDurations(false);
-                      setSelectedSlot(null);
-                    }}
-                    className={`px-4 py-2 hover:bg-accent ${
-                      d === duration ? 'bg-primary text-light' : 'text-neutral'
-                    }`}
-                  >
-                    {d} min
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-sm font-medium text-neutral">Duración</span>
+            <div className="flex border border-muted rounded-lg overflow-hidden">
+              {[60, 90, 120].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => {
+                    setDuration(d as 60 | 90 | 120);
+                    setSelectedSlot(null);
+                  }}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    d === duration
+                      ? 'bg-accent text-dark'
+                      : 'bg-surface text-neutral hover:bg-muted-light'
+                  }`}
+                >
+                  {d} min
+                </button>
+              ))}
+            </div>
           </div>
 
           <button
             onClick={() => setShowEarly(!showEarly)}
-            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
+            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
           >
-            {showEarly ? 'Ocultar temprano' : 'Mostrar temprano'}
+            {showEarly ? 'Ocultar Matutinos' : 'Horario Matutinos'}
           </button>
         </div>
       </div>
@@ -619,20 +612,20 @@ export default function AdminTurnero({
                               value={commentValue}
                               onChange={(e) => setCommentValue(e.target.value)}
                               placeholder="Comentarios"
-                              className="w-full text-xs bg-white/10 border border-white/20 rounded px-2 py-1 text-white placeholder-white/60 resize-none"
+                              className="w-full text-xs bg-surface border border-muted rounded px-2 py-1 text-neutral placeholder-neutral-muted resize-none focus:outline-none focus:ring-1 focus:ring-accent"
                               rows={3}
                               autoFocus
                             />
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleCommentSave(booking)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
+                                className="bg-success hover:bg-success-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                               >
                                 ✓
                               </button>
                               <button
                                 onClick={handleCommentCancel}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs font-medium"
+                                className="bg-muted hover:bg-muted-light text-neutral px-2 py-1 rounded text-xs font-medium transition-colors"
                               >
                                 ✕
                               </button>
@@ -660,13 +653,13 @@ export default function AdminTurnero({
                           <>
                             <button
                               onClick={() => handleBookingAction(booking, 'accept')}
-                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-success hover:bg-success-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Aceptar
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'cancel')}
-                              className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-error hover:bg-error-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Rechazar
                             </button>
@@ -676,13 +669,13 @@ export default function AdminTurnero({
                           <>
                             <button
                               onClick={() => handleBookingAction(booking, 'confirm')}
-                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-success hover:bg-success-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Confirmada
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'absent')}
-                              className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-warning hover:bg-warning-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Cancelada
                             </button>
@@ -692,13 +685,13 @@ export default function AdminTurnero({
                           <>
                             <button
                               onClick={() => handleBookingAction(booking, 'unpresent')}
-                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-success hover:bg-success-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Confirmada
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking, 'absent')}
-                              className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 rounded text-xs font-medium"
+                              className="bg-warning hover:bg-warning-light text-light px-2 py-1 rounded text-xs font-medium transition-colors"
                             >
                               Cancelada
                             </button>
@@ -707,7 +700,7 @@ export default function AdminTurnero({
                         {!booking.is_recurring && (
                           <button
                             onClick={() => handleEditBooking(booking)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs font-medium"
+                            className="bg-accent hover:bg-accent-hover text-dark px-2 py-1 rounded text-xs font-medium transition-colors"
                           >
                             Editar
                           </button>
@@ -731,11 +724,11 @@ export default function AdminTurnero({
         <h4 className="font-semibold text-neutral mb-2">Leyenda:</h4>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+            <div className="w-4 h-4 bg-orange-500 rounded"></div>
             <span className="text-neutral">Pendiente</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-600 rounded"></div>
+            <div className="w-4 h-4 bg-gray-500 rounded"></div>
             <span className="text-neutral">Aceptada</span>
           </div>
           <div className="flex items-center gap-2">
@@ -747,7 +740,7 @@ export default function AdminTurnero({
             <span className="text-neutral">Cancelada</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-purple-500 rounded"></div>
+            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
             <span className="text-neutral">Recurrente</span>
           </div>
         </div>
@@ -764,30 +757,30 @@ export default function AdminTurnero({
                 .map((booking) => (
                   <div
                     key={booking.id}
-                    className="flex items-center justify-between p-3 bg-orange-100 border border-orange-300 rounded"
+                    className="flex items-center justify-between p-3 bg-warning/10 border border-warning rounded"
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-orange-900">
+                      <div className="font-medium text-neutral">
                         {booking.user?.full_name || 'Usuario desconocido'}
                       </div>
-                      <div className="text-sm text-orange-800">
+                      <div className="text-sm text-neutral-muted">
                         Cancha {booking.court} • {booking.start_time} - {booking.end_time} (
                         {booking.duration_minutes} min)
                       </div>
                       {booking.user?.phone && (
-                        <div className="text-sm text-orange-700">{booking.user.phone}</div>
+                        <div className="text-sm text-neutral-muted">{booking.user.phone}</div>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleBookingAction(booking, 'restore')}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium"
+                        className="bg-success hover:bg-success-light text-light px-3 py-1.5 rounded text-sm font-medium transition-colors"
                       >
                         Restaurar
                       </button>
                       <button
                         onClick={() => handleBookingAction(booking, 'delete')}
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm font-medium"
+                        className="bg-error hover:bg-error-light text-light px-3 py-1.5 rounded text-sm font-medium transition-colors"
                       >
                         Eliminar
                       </button>
@@ -807,7 +800,7 @@ export default function AdminTurnero({
 
             <div className="space-y-4">
               {/* Selected slot info */}
-              <div className="bg-accent p-3 rounded text-neutral">
+              <div className="bg-accent/10 border border-accent p-3 rounded text-neutral">
                 <p className="font-medium">Horario seleccionado: {selectedSlot}</p>
                 <p className="text-sm">Duración: {duration} minutos</p>
               </div>
@@ -850,14 +843,14 @@ export default function AdminTurnero({
                     setSelectedUser('');
                     setUserSearchTerm('');
                   }}
-                  className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  className="flex-1 bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={createBooking}
                   disabled={!selectedUser}
-                  className="flex-1 bg-primary text-light px-4 py-2 rounded hover:bg-primary-hover disabled:bg-muted disabled:text-neutral"
+                  className="flex-1 bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover disabled:bg-muted disabled:text-neutral-muted transition-colors"
                 >
                   Crear Reserva
                 </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
 
@@ -69,10 +69,8 @@ const allSlots = [
 
 export default function Turnero() {
   const { user, loading } = useUser();
-  const baseDate = useRef(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
-  const [showDurations, setShowDurations] = useState(false);
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
@@ -81,6 +79,41 @@ export default function Turnero() {
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
   const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+  // Generar los 7 días disponibles (hoy + 6 posteriores)
+  const getAvailableDates = (): Date[] => {
+    const dates: Date[] = [];
+    const today = new Date();
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date);
+    }
+
+    return dates;
+  };
+
+  const formatDayName = (date: Date) => {
+    return date.toLocaleDateString('es-ES', { weekday: 'short' });
+  };
+
+  const formatDayNumber = (date: Date) => {
+    return date.getDate();
+  };
+
+  const formatMonth = (date: Date) => {
+    return date.toLocaleDateString('es-ES', { month: 'short' });
+  };
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  const isSelected = (date: Date) => {
+    return date.toDateString() === selectedDate.toDateString();
+  };
 
   const fetchBookings = useCallback(async () => {
     const dateString = formatDate(selectedDate);
@@ -143,21 +176,6 @@ export default function Turnero() {
 
     loadBookings();
   }, [selectedDate, fetchBookings, fetchRecurringBookings]);
-
-  const changeDate = (offset: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + offset);
-
-    const minDate = new Date(baseDate.current);
-    const maxDate = new Date(baseDate.current);
-    maxDate.setDate(baseDate.current.getDate() + 6);
-
-    if (newDate >= minDate && newDate <= maxDate) {
-      setSelectedDate(newDate);
-      setSelectedSlot(null);
-      setPendingBooking(null);
-    }
-  };
 
   const isFullyReserved = (time: string) => {
     const [th, tm] = time.split(':').map(Number);
@@ -269,64 +287,63 @@ export default function Turnero() {
   };
 
   return (
-    <section className="p-6 bg-background text-white min-h-[70vh]">
+    <section id="turnero" className="pt-12 pb-6 px-6 bg-background text-white min-h-[70vh]">
       {/* Date navigation */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => changeDate(-1)}
-            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
-          >
-            ← Día anterior
-          </button>
-          <span className="font-semibold">
-            {selectedDate.toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </span>
-          <button
-            onClick={() => changeDate(1)}
-            className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
-          >
-            Día siguiente →
-          </button>
-        </div>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowDurations(!showDurations)}
-            className="bg-accent text-background px-4 py-2 rounded"
-          >
-            {duration} min
-          </button>
-          {showDurations && (
-            <div className="absolute mt-2 bg-surface rounded shadow-lg flex flex-col border border-muted">
-              {[60, 90, 120].map((d) => (
+      <div className="sticky top-23 z-30 bg-background/95 backdrop-blur-sm border-b border-muted py-4 mb-6 pt-9">
+        <div className="flex justify-center items-center px-4 relative">
+          {/* Turnero width container */}
+          <div className="flex justify-between items-center max-w-[800px] w-full">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {getAvailableDates().map((date) => (
                 <button
-                  key={d}
-                  onClick={() => {
-                    setDuration(d as 60 | 90 | 120);
-                    setShowDurations(false);
-                    setSelectedSlot(null);
-                  }}
-                  className={`px-4 py-2 hover:bg-accent ${d === duration ? 'bg-primary text-light' : 'text-neutral'}`}
+                  key={date.toISOString()}
+                  onClick={() => setSelectedDate(date)}
+                  className={`flex flex-col items-center justify-center min-w-[60px] h-16 px-3 rounded-lg border-2 transition-all duration-200 ${
+                    isSelected(date)
+                      ? 'bg-accent text-dark border-accent'
+                      : isToday(date)
+                        ? 'bg-surface text-neutral border-accent/50 hover:border-accent'
+                        : 'bg-surface text-neutral border-muted hover:border-accent/50'
+                  }`}
                 >
-                  {d} min
+                  <span className="text-xs font-medium">{formatDayName(date)}</span>
+                  <span className="text-lg font-bold">{formatDayNumber(date)}</span>
+                  <span className="text-xs">{formatMonth(date)}</span>
                 </button>
               ))}
             </div>
-          )}
-        </div>
 
-        <button
-          onClick={() => setShowEarly(!showEarly)}
-          className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-neutral"
-        >
-          {showEarly ? 'Ocultar temprano' : 'Mostrar temprano'}
-        </button>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-sm font-medium text-neutral">Duración</span>
+              <div className="flex border border-muted rounded-lg overflow-hidden">
+                {[60, 90, 120].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => {
+                      setDuration(d as 60 | 90 | 120);
+                      setSelectedSlot(null);
+                    }}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      d === duration
+                        ? 'bg-accent text-dark'
+                        : 'bg-surface text-neutral hover:bg-muted-light'
+                    }`}
+                  >
+                    {d} min
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Horarios Matutinos button positioned absolutely */}
+          <button
+            onClick={() => setShowEarly(!showEarly)}
+            className="absolute right-4 bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
+          >
+            {showEarly ? 'Ocultar Matutinos' : 'Horarios Matutinos'}
+          </button>
+        </div>
       </div>
 
       {/* Slots grid */}
@@ -385,14 +402,6 @@ export default function Turnero() {
               ✅ Confirmar reserva
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Debug info for mobile */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs text-gray-400 mt-2 p-2 bg-gray-800 rounded">
-          Debug: selectedSlot={selectedSlot ? 'true' : 'false'}, user={user ? 'true' : 'false'},
-          loading={loading ? 'true' : 'false'}
         </div>
       )}
 

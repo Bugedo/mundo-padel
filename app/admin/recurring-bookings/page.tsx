@@ -321,7 +321,7 @@ export default function RecurringBookingsPage() {
             setError(null);
             fetchRecurringBookings();
           }}
-          className="bg-primary text-light px-4 py-2 rounded hover:bg-primary-hover"
+          className="bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover transition-colors"
         >
           Reintentar
         </button>
@@ -337,7 +337,7 @@ export default function RecurringBookingsPage() {
       <div className="mb-6">
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-success text-light px-4 py-2 rounded hover:bg-success/80"
+          className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors"
         >
           {showCreateForm ? 'Cancelar' : 'Crear Reserva Recurrente'}
         </button>
@@ -488,7 +488,7 @@ export default function RecurringBookingsPage() {
               <button
                 onClick={createRecurringBooking}
                 disabled={!selectedUser || !selectedTime || !startDate}
-                className="bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:bg-accent disabled:opacity-50"
+                className="bg-success text-light px-4 py-2 rounded hover:bg-success-light disabled:bg-muted disabled:text-neutral-muted transition-colors"
               >
                 Crear Reserva Recurrente
               </button>
@@ -536,7 +536,7 @@ export default function RecurringBookingsPage() {
                 </button>
                 <button
                   onClick={() => deleteRecurringBooking(booking.id)}
-                  className="bg-error text-light px-3 py-1 rounded hover:bg-error/80"
+                  className="bg-error text-light px-3 py-1 rounded hover:bg-error-light transition-colors"
                 >
                   Eliminar
                 </button>

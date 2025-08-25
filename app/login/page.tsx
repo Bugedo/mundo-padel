@@ -40,7 +40,7 @@ export default function LoginPage() {
 
       // REGISTER user
       try {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -69,7 +69,6 @@ export default function LoginPage() {
             setMessage(`❌ ${error.message}`);
           }
         } else {
-          console.log('Signup successful:', data);
           setShowVerificationModal(true);
           setMessage('');
         }
@@ -127,16 +126,25 @@ export default function LoginPage() {
     <div className="flex justify-center items-center min-h-screen bg-background">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface shadow rounded p-6 w-full max-w-sm space-y-4 border border-muted"
+        className="bg-surface-light shadow-xl rounded-xl p-8 w-full max-w-md space-y-6 border border-muted"
       >
-        <h1 className="text-2xl font-bold text-center text-neutral">
-          {isRegister ? 'Registrarse' : 'Iniciar Sesión'}
-        </h1>
+        {/* Header */}
+        <div className="text-center">
+          <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-dark font-bold text-2xl">MP</span>
+          </div>
+          <h1 className="text-3xl font-bold text-neutral mb-2">
+            {isRegister ? 'Registrarse' : 'Iniciar Sesión'}
+          </h1>
+          <p className="text-neutral-muted">
+            {isRegister ? 'Crea tu cuenta en Mundo Padel' : 'Accede a tu cuenta'}
+          </p>
+        </div>
 
         {isRegister && (
           <div>
-            <label className="block mb-1 flex items-center gap-2 text-neutral">
-              <User size={16} />
+            <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+              <User size={16} className="text-accent" />
               Nombre Completo *
             </label>
             <input
@@ -144,15 +152,15 @@ export default function LoginPage() {
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
+              className="w-full border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
               placeholder="Juan Pérez"
             />
           </div>
         )}
 
         <div>
-          <label className="block mb-1 flex items-center gap-2 text-neutral">
-            <Mail size={16} />
+          <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+            <Mail size={16} className="text-accent" />
             Email *
           </label>
           <input
@@ -160,22 +168,22 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
+            className="w-full border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
             placeholder="juan@ejemplo.com"
           />
         </div>
 
         {isRegister && (
           <div>
-            <label className="block mb-1 flex items-center gap-2 text-neutral">
-              <Phone size={16} />
+            <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+              <Phone size={16} className="text-accent" />
               Teléfono *
             </label>
             <div className="flex gap-2">
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
-                className="border border-muted rounded px-2 py-2 text-sm bg-surface text-neutral"
+                className="border border-muted rounded-lg px-3 py-3 text-sm bg-surface text-neutral focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
               >
                 <option value="+54">🇦🇷 +54</option>
                 <option value="+1">🇺🇸 +1</option>
@@ -192,7 +200,7 @@ export default function LoginPage() {
                 value={phone}
                 onChange={handlePhoneChange}
                 onFocus={handlePhoneFocus}
-                className="flex-1 border border-muted rounded px-3 py-2 bg-surface text-neutral"
+                className="flex-1 border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
                 placeholder="351 1234-5678"
               />
             </div>
@@ -200,28 +208,38 @@ export default function LoginPage() {
         )}
 
         <div>
-          <label className="block mb-1 text-neutral">Contraseña *</label>
+          <label className="block mb-2 text-neutral font-medium">Contraseña *</label>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-muted rounded px-3 py-2 bg-surface text-neutral"
+            className="w-full border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
             placeholder={isRegister ? 'Mínimo 6 caracteres' : 'Tu contraseña'}
           />
           {isRegister && (
-            <p className="text-xs text-neutral mt-1">
+            <p className="text-xs text-neutral-muted mt-2">
               La contraseña debe tener al menos 6 caracteres
             </p>
           )}
         </div>
 
-        {message && <p className="text-center text-sm text-neutral">{message}</p>}
+        {message && (
+          <div
+            className={`p-3 rounded-lg text-sm ${
+              message.includes('❌')
+                ? 'bg-error-light text-error border border-error'
+                : 'bg-success-light text-success border border-success'
+            }`}
+          >
+            {message}
+          </div>
+        )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-success text-light px-4 py-2 rounded hover:bg-success/80 disabled:opacity-50"
+          className="w-full bg-accent text-dark font-semibold px-6 py-3 rounded-lg hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md"
         >
           {loading
             ? isRegister
@@ -232,58 +250,64 @@ export default function LoginPage() {
               : 'Iniciar Sesión'}
         </button>
 
-        <p className="text-center text-sm text-neutral">
-          {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setMessage('');
-              setFullName('');
-              setPhone('');
-            }}
-            className="text-primary hover:underline"
-          >
-            {isRegister ? 'Iniciar Sesión' : 'Registrarse'}
-          </button>
-        </p>
+        <div className="text-center">
+          <p className="text-sm text-neutral-muted">
+            {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setMessage('');
+                setFullName('');
+                setPhone('');
+              }}
+              className="text-accent hover:text-accent-hover font-medium transition-colors"
+            >
+              {isRegister ? 'Iniciar Sesión' : 'Registrarse'}
+            </button>
+          </p>
+        </div>
       </form>
 
       {/* Verification Modal */}
       {showVerificationModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg p-6 max-w-md mx-4 border border-muted">
+        <div className="fixed inset-0 bg-dark bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-light rounded-xl p-8 max-w-md w-full border border-muted shadow-2xl">
             <div className="text-center">
-              <UserCheck size={48} className="mx-auto text-success mb-4" />
-              <h2 className="text-xl font-bold mb-2 text-neutral">¡Cuenta creada exitosamente!</h2>
+              <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-6">
+                <UserCheck size={32} className="text-light" />
+              </div>
+              <h2 className="text-2xl font-bold mb-4 text-neutral">¡Cuenta creada exitosamente!</h2>
 
-              <div className="bg-primary/10 border border-primary rounded-lg p-4 mb-4">
-                <p className="text-neutral mb-2">
+              <div className="bg-accent/10 border border-accent rounded-lg p-4 mb-6">
+                <p className="text-neutral mb-2 font-medium">
                   📧 <strong>Verificación por email enviada</strong>
                 </p>
-                <p className="text-sm text-neutral">Hemos enviado un email de verificación a:</p>
-                <p className="text-sm font-medium text-primary mt-1">{email}</p>
+                <p className="text-sm text-neutral-muted">
+                  Hemos enviado un email de verificación a:
+                </p>
+                <p className="text-sm font-medium text-accent mt-1">{email}</p>
               </div>
 
-              <div className="text-left bg-surface border border-muted rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-neutral mb-2">
+              <div className="text-left bg-surface border border-muted rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-neutral mb-3">
                   📋 Pasos para verificar tu cuenta:
                 </h3>
-                <ol className="text-sm text-neutral space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                <ol className="text-sm text-neutral space-y-3">
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                       1
                     </span>
                     <span>Revisa tu bandeja de entrada (y carpeta de spam)</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                       2
                     </span>
                     <span>Haz clic en el enlace de verificación del email</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="bg-primary text-light rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                       3
                     </span>
                     <span>Serás redirigido automáticamente al sitio</span>
@@ -291,8 +315,8 @@ export default function LoginPage() {
                 </ol>
               </div>
 
-              <div className="bg-warning/10 border border-warning rounded-lg p-3 mb-4">
-                <p className="text-sm text-warning">
+              <div className="bg-warning/10 border border-warning rounded-lg p-4 mb-6">
+                <p className="text-sm text-warning font-medium">
                   ⏰ <strong>Importante:</strong> El enlace de verificación expira en 24 horas
                 </p>
               </div>
@@ -300,7 +324,7 @@ export default function LoginPage() {
               <div className="flex gap-3">
                 <button
                   onClick={handleCloseVerificationModal}
-                  className="flex-1 bg-primary text-light px-4 py-2 rounded hover:bg-primary/80"
+                  className="flex-1 bg-accent text-dark font-semibold px-4 py-3 rounded-lg hover:bg-accent-hover transition-all"
                 >
                   Entendido
                 </button>
@@ -310,7 +334,7 @@ export default function LoginPage() {
                     setIsRegister(false);
                     setMessage('');
                   }}
-                  className="bg-accent text-neutral px-4 py-2 rounded hover:bg-accent-hover"
+                  className="bg-muted text-neutral px-4 py-3 rounded-lg hover:bg-muted-light transition-all"
                 >
                   Ir al Login
                 </button>
