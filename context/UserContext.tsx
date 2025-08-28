@@ -7,6 +7,7 @@ interface User {
   id: string;
   email: string;
   role: string;
+  full_name?: string;
 }
 
 interface UserContextType {
@@ -32,7 +33,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       // Try to fetch profile
       let { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, email, role')
+        .select('id, email, role, full_name')
         .eq('id', user.id)
         .single();
 
@@ -42,6 +43,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
           id: user.id,
           email: user.email ?? '', // fallback
           role: 'user', // default role
+          full_name: user.user_metadata?.full_name || null,
         });
 
         if (!insertError) {
@@ -49,6 +51,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
             id: user.id,
             email: user.email ?? '',
             role: 'user',
+            full_name: user.user_metadata?.full_name || null,
           };
         }
       }

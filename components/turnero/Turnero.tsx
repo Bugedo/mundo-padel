@@ -289,7 +289,7 @@ export default function Turnero() {
   return (
     <section id="turnero" className="pt-12 pb-6 px-6 bg-background text-white min-h-[70vh]">
       {/* Date navigation */}
-      <div className="sticky top-23 z-30 bg-background/95 backdrop-blur-sm border-b border-muted py-4 mb-6 pt-9">
+      <div className="sticky top-16 z-30 bg-background/95 backdrop-blur-sm border-b border-muted py-4 mb-6">
         <div className="flex justify-center items-center px-4 relative">
           {/* Turnero width container */}
           <div className="flex justify-between items-center max-w-[800px] w-full">

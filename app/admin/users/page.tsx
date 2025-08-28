@@ -52,6 +52,17 @@ export default function UsersPage() {
     phone: '',
   });
 
+  // Create user states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'user',
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+
   const fetchUsers = async (showAll = false) => {
     setLoading(true);
     const url = showAll ? '/api/users?showAll=true' : '/api/users';
@@ -179,6 +190,61 @@ export default function UsersPage() {
     setEditForm({ full_name: '', email: '', phone: '' });
   };
 
+  const handleCreateUser = async () => {
+    if (!createForm.email || !createForm.full_name || !createForm.password) {
+      alert('Por favor completa todos los campos obligatorios');
+      return;
+    }
+
+    setCreateLoading(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: createForm.email,
+          full_name: createForm.full_name,
+          phone: createForm.phone,
+          password: createForm.password,
+          role: createForm.role,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert('Usuario creado exitosamente');
+        setShowCreateModal(false);
+        setCreateForm({
+          full_name: '',
+          email: '',
+          phone: '',
+          password: '',
+          role: 'user',
+        });
+        fetchUsers(showAllUsers);
+      } else {
+        alert(`Error al crear usuario: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Error de red al crear usuario');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleCancelCreate = () => {
+    setShowCreateModal(false);
+    setCreateForm({
+      full_name: '',
+      email: '',
+      phone: '',
+      password: '',
+      role: 'user',
+    });
+  };
+
   const handleSearch = async (term: string) => {
     setSearchTerm(term);
 
@@ -263,25 +329,21 @@ export default function UsersPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Usuarios</h1>
 
-      {/* Search and status */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center gap-4">
-          <input
-            type="text"
-            placeholder="Buscar usuarios por nombre o email..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="border border-muted rounded px-3 py-2 w-full max-w-md bg-surface text-neutral"
-          />
-          <div className="text-sm text-neutral">
-            {showAllUsers ? 'Mostrando todos los usuarios' : 'Mostrando solo administradores'}
-          </div>
-        </div>
-        {!searchTerm && (
-          <div className="text-sm text-neutral">
-            Usa el buscador para acceder a todos los usuarios del sistema
-          </div>
-        )}
+      {/* Search and Create User */}
+      <div className="flex justify-between items-center mb-6">
+        <input
+          type="text"
+          placeholder="Buscar usuarios por nombre o email..."
+          value={searchTerm}
+          onChange={(e) => handleSearch(e.target.value)}
+          className="border border-muted rounded px-3 py-2 w-80 bg-surface text-neutral"
+        />
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover transition-colors"
+        >
+          Crear Usuario
+        </button>
       </div>
 
       {/* Users list */}
@@ -447,6 +509,92 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface border border-muted rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4 text-neutral">Crear Nuevo Usuario</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">
+                  Nombre Completo *
+                </label>
+                <input
+                  type="text"
+                  value={createForm.full_name}
+                  onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                  placeholder="Nombre completo"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Email *</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Teléfono</label>
+                <input
+                  type="tel"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                  placeholder="+54 9 11 1234-5678"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Contraseña *</label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                  placeholder="Contraseña temporal"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Rol</label>
+                <select
+                  value={createForm.role}
+                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                >
+                  <option value="user">Usuario</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleCreateUser}
+                disabled={createLoading}
+                className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors disabled:opacity-50"
+              >
+                {createLoading ? 'Creando...' : 'Crear Usuario'}
+              </button>
+              <button
+                onClick={handleCancelCreate}
+                disabled={createLoading}
+                className="bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

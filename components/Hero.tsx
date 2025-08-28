@@ -43,7 +43,7 @@ export default function Hero() {
   }, [slides.length]);
 
   return (
-    <section className="relative bg-background text-neutral min-h-screen flex items-center overflow-hidden">
+    <section className="relative bg-background text-neutral min-h-screen flex items-start overflow-hidden">
       {/* Background Carousel */}
       <div className="absolute inset-0">
         {slides.map((slide, index) => (
@@ -68,39 +68,37 @@ export default function Hero() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 container mx-auto px-6 md:px-20 py-16">
-        <div className="flex flex-col items-center text-center space-y-8">
+      <div className="relative z-10 container mx-auto px-6 md:px-20 pt-10 pb-8">
+        <div className="flex flex-col items-center text-center space-y-4">
+          {/* Main Title */}
+          <motion.h1
+            className="text-6xl md:text-7xl lg:text-8xl font-bold leading-tight"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+          >
+            <span className="text-neutral">Reservá tu turno</span>
+          </motion.h1>
+
           {/* Logo */}
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="mb-6"
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="mb-0"
           >
             <Image
               src="/photos/logo.PNG"
               alt="Mundo Pádel"
               width={180}
               height={180}
-              className="mx-auto"
+              className="mx-auto w-56 h-auto"
             />
           </motion.div>
 
-          {/* Main Title */}
-          <motion.h1
-            className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-          >
-            <span className="text-neutral">Reservá tu turno en</span>
-            <br />
-            <span className="text-accent">Mundo Pádel</span>
-          </motion.h1>
-
           {/* Description */}
           <motion.p
-            className="text-xl md:text-2xl text-neutral-muted leading-relaxed max-w-3xl"
+            className="text-2xl md:text-3xl text-neutral-muted leading-relaxed max-w-4xl"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.8 }}
@@ -117,7 +115,7 @@ export default function Hero() {
             className="flex flex-wrap gap-6 justify-center"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1 }}
+            transition={{ duration: 0.8, delay: 1.0 }}
           >
             <div className="flex items-center gap-2 text-neutral-muted">
               <Clock size={20} className="text-accent" />
@@ -139,12 +137,21 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 1.2 }}
           >
-            <button
+            <motion.button
               onClick={handleScrollToTurnero}
               className="group bg-accent text-dark px-12 py-6 text-2xl rounded-2xl font-bold hover:bg-accent-hover transition-all duration-300 shadow-2xl hover:shadow-3xl transform hover:scale-105"
+              animate={{
+                rotate: [0, -2, 2, -2, 0],
+                scale: [1, 1.02, 1, 1.02, 1],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
             >
               RESERVA AHORA
-            </button>
+            </motion.button>
           </motion.div>
         </div>
       </div>
