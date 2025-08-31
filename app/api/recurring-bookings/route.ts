@@ -276,17 +276,31 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Missing id in request body' }, { status: 400 });
     }
 
-    // Delete the recurring booking
-    const { error: deleteError } = await supabaseAdmin
+    // First, delete all bookings that reference this recurring booking
+    const { error: deleteBookingsError } = await supabaseAdmin
+      .from('bookings')
+      .delete()
+      .eq('recurring_booking_id', id);
+
+    if (deleteBookingsError) {
+      console.error('Error deleting related bookings:', deleteBookingsError);
+      return NextResponse.json({ error: deleteBookingsError.message }, { status: 500 });
+    }
+
+    // Then delete the recurring booking
+    const { error: deleteRecurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .delete()
       .eq('id', id);
 
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    if (deleteRecurringError) {
+      console.error('Error deleting recurring booking:', deleteRecurringError);
+      return NextResponse.json({ error: deleteRecurringError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ message: 'Recurring booking deleted successfully' });
+    return NextResponse.json({
+      message: 'Recurring booking and related bookings deleted successfully',
+    });
   } catch (error) {
     console.error('Recurring bookings DELETE error:', error);
     return NextResponse.json(
