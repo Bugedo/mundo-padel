@@ -50,6 +50,7 @@ export default function UsersPage() {
     full_name: '',
     email: '',
     phone: '',
+    role: '',
   });
 
   // Create user states
@@ -122,7 +123,15 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este usuario?')) return;
+    const user = users.find((u) => u.id === id);
+    const userName = user?.full_name || user?.email || 'este usuario';
+
+    if (
+      !confirm(
+        `¿Estás seguro de que quieres eliminar a ${userName}?\n\n⚠️ Esta acción eliminará:\n• Todas las reservas del usuario\n• Todas las reservas recurrentes\n• El perfil del usuario\n• La cuenta de autenticación\n\nEsta acción NO se puede deshacer.`,
+      )
+    )
+      return;
 
     try {
       const res = await fetch('/api/users', {
@@ -132,7 +141,8 @@ export default function UsersPage() {
       });
 
       if (res.ok) {
-        alert('Usuario eliminado');
+        const data = await res.json();
+        alert(`Usuario eliminado exitosamente: ${data.message}`);
         fetchUsers(showAllUsers);
       } else {
         const data = await res.json();
@@ -150,6 +160,7 @@ export default function UsersPage() {
       full_name: user.full_name || '',
       email: user.email,
       phone: user.phone || '',
+      role: user.role,
     });
   };
 
@@ -166,14 +177,16 @@ export default function UsersPage() {
             full_name: editForm.full_name,
             email: editForm.email,
             phone: editForm.phone,
+            role: editForm.role,
           },
         }),
       });
 
       if (res.ok) {
-        alert('Usuario actualizado exitosamente');
+        const responseData = await res.json();
+        alert(`Usuario actualizado exitosamente: ${responseData.message}`);
         setEditingUserId(null);
-        setEditForm({ full_name: '', email: '', phone: '' });
+        setEditForm({ full_name: '', email: '', phone: '', role: '' });
         fetchUsers(showAllUsers);
       } else {
         const data = await res.json();
@@ -187,7 +200,7 @@ export default function UsersPage() {
 
   const handleCancelEdit = () => {
     setEditingUserId(null);
-    setEditForm({ full_name: '', email: '', phone: '' });
+    setEditForm({ full_name: '', email: '', phone: '', role: '' });
   };
 
   const handleCreateUser = async () => {
@@ -213,7 +226,7 @@ export default function UsersPage() {
       const data = await res.json();
 
       if (res.ok) {
-        alert('Usuario creado exitosamente');
+        alert(`Usuario creado exitosamente: ${data.message}`);
         setShowCreateModal(false);
         setCreateForm({
           full_name: '',
@@ -386,6 +399,17 @@ export default function UsersPage() {
                       className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                       placeholder="+54 9 11 1234-5678"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-neutral">Rol</label>
+                    <select
+                      value={editForm.role}
+                      onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                    >
+                      <option value="user">Usuario</option>
+                      <option value="admin">Administrador</option>
+                    </select>
                   </div>
                   <div className="flex items-end">
                     <div className="flex gap-2">
