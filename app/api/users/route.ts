@@ -229,7 +229,7 @@ export async function PATCH(req: Request) {
 
     // Then, update the user metadata in Supabase Auth if relevant fields changed
     if (safeUpdates.full_name || safeUpdates.phone) {
-      const userMetadata: any = {};
+      const userMetadata: Record<string, string> = {};
 
       if (safeUpdates.full_name) {
         userMetadata.full_name = safeUpdates.full_name;
