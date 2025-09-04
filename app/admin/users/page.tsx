@@ -350,7 +350,7 @@ export default function UsersPage() {
       <div className="text-center py-8">
         <p className="text-error mb-4">Error: {error}</p>
         <button
-          onClick={() => fetchUsers(showAllUsers)}
+          onClick={() => fetchUsers(true)}
           className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors"
         >
           Reintentar
