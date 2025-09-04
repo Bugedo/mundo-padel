@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 
 interface User {
   id: string;
@@ -33,6 +32,23 @@ interface Booking {
   };
 }
 
+// Custom hook for debouncing
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -42,7 +58,9 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showAllUsers, setShowAllUsers] = useState(false);
+
+  // Debounced search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   // Edit user states
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -64,7 +82,7 @@ export default function UsersPage() {
   });
   const [createLoading, setCreateLoading] = useState(false);
 
-  const fetchUsers = async (showAll = false) => {
+  const fetchUsers = useCallback(async (showAll = false) => {
     setLoading(true);
     const url = showAll ? '/api/users?showAll=true' : '/api/users';
     const res = await fetch(url, { cache: 'no-store' });
@@ -72,14 +90,32 @@ export default function UsersPage() {
 
     if (res.ok && Array.isArray(data)) {
       setUsers(data);
-      setFilteredUsers(data);
       setError(null);
     } else {
       setError(data.error || 'Failed to load users');
     }
 
     setLoading(false);
-  };
+  }, []);
+
+  // Memoized filtered users to avoid recalculation on every render
+  const memoizedFilteredUsers = useMemo(() => {
+    if (!debouncedSearchTerm.trim()) {
+      return users;
+    }
+
+    return users.filter(
+      (user) =>
+        user.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (user.full_name &&
+          user.full_name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())),
+    );
+  }, [users, debouncedSearchTerm]);
+
+  // Update filtered users when memoized result changes
+  useEffect(() => {
+    setFilteredUsers(memoizedFilteredUsers);
+  }, [memoizedFilteredUsers]);
 
   const fetchUserBookings = async (userId: string, filter: 'active' | 'past') => {
     try {
@@ -102,8 +138,8 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    fetchUsers(showAllUsers);
-  }, [showAllUsers]);
+    fetchUsers(true);
+  }, [fetchUsers]);
 
   const handleToggleBookings = async (userId: string) => {
     if (expandedUserId === userId) {
@@ -143,7 +179,7 @@ export default function UsersPage() {
       if (res.ok) {
         const data = await res.json();
         alert(`Usuario eliminado exitosamente: ${data.message}`);
-        fetchUsers(showAllUsers);
+        fetchUsers(true);
       } else {
         const data = await res.json();
         alert(`Error al eliminar usuario: ${data.error}`);
@@ -187,7 +223,7 @@ export default function UsersPage() {
         alert(`Usuario actualizado exitosamente: ${responseData.message}`);
         setEditingUserId(null);
         setEditForm({ full_name: '', email: '', phone: '', role: '' });
-        fetchUsers(showAllUsers);
+        fetchUsers(true);
       } else {
         const data = await res.json();
         alert(`Error al actualizar usuario: ${data.error}`);
@@ -235,7 +271,8 @@ export default function UsersPage() {
           password: '',
           role: 'user',
         });
-        fetchUsers(showAllUsers);
+        // Refresh the users list to show the new user
+        fetchUsers(true);
       } else {
         alert(`Error al crear usuario: ${data.error}`);
       }
@@ -258,26 +295,10 @@ export default function UsersPage() {
     });
   };
 
-  const handleSearch = async (term: string) => {
+  const handleSearch = (term: string) => {
     setSearchTerm(term);
-
-    // If there's a search term, fetch all users to search through them
-    if (term.trim() && !showAllUsers) {
-      setShowAllUsers(true);
-      await fetchUsers(true);
-    } else if (!term.trim() && showAllUsers) {
-      // If search is cleared and we were showing all users, go back to admins only
-      setShowAllUsers(false);
-      await fetchUsers(false);
-    }
-
-    // Filter the current users based on search term
-    const filtered = users.filter(
-      (user) =>
-        user.email.toLowerCase().includes(term.toLowerCase()) ||
-        (user.full_name && user.full_name.toLowerCase().includes(term.toLowerCase())),
-    );
-    setFilteredUsers(filtered);
+    // No need to fetch users again, just update the search term
+    // The debounced search will handle the filtering automatically
   };
 
   const formatDate = (dateString: string) => {
@@ -344,13 +365,18 @@ export default function UsersPage() {
 
       {/* Search and Create User */}
       <div className="flex justify-between items-center mb-6">
-        <input
-          type="text"
-          placeholder="Buscar usuarios por nombre o email..."
-          value={searchTerm}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="border border-muted rounded px-3 py-2 w-80 bg-surface text-neutral"
-        />
+        <div className="flex gap-4 items-center">
+          <input
+            type="text"
+            placeholder="Buscar usuarios por nombre o email..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="border border-muted rounded px-3 py-2 w-80 bg-surface text-neutral"
+          />
+          <div className="text-sm text-neutral-muted">
+            {debouncedSearchTerm.trim() && <span>Buscando: &quot;{debouncedSearchTerm}&quot;</span>}
+          </div>
+        </div>
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover transition-colors"

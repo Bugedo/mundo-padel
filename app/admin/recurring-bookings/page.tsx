@@ -103,11 +103,35 @@ export default function RecurringBookingsPage() {
 
   // Filter users by search term
   useEffect(() => {
-    const filtered = users.filter(
-      (user) =>
-        user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(userSearchTerm.toLowerCase()),
-    );
+    console.log('Filtering users:', {
+      totalUsers: users.length,
+      searchTerm: userSearchTerm,
+      searchTermLength: userSearchTerm.length,
+    });
+
+    if (!userSearchTerm.trim()) {
+      setFilteredUsers(users);
+      return;
+    }
+
+    const filtered = users.filter((user) => {
+      const nameMatch = user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase());
+      const emailMatch = user.email.toLowerCase().includes(userSearchTerm.toLowerCase());
+
+      if (nameMatch || emailMatch) {
+        console.log('User matches search:', {
+          id: user.id,
+          name: user.full_name,
+          email: user.email,
+          nameMatch,
+          emailMatch,
+        });
+      }
+
+      return nameMatch || emailMatch;
+    });
+
+    console.log('Filtered users result:', filtered.length, 'users found');
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
 
@@ -148,12 +172,31 @@ export default function RecurringBookingsPage() {
   };
 
   const fetchUsers = async () => {
-    const res = await fetch('/api/users', { cache: 'no-store' });
-    const data = await res.json();
+    try {
+      console.log('Fetching users with showAll=true...');
+      const res = await fetch('/api/users?showAll=true', { cache: 'no-store' });
+      const data = await res.json();
 
-    if (res.ok && Array.isArray(data)) {
-      setUsers(data);
-      setFilteredUsers(data);
+      console.log('API Response:', {
+        status: res.status,
+        ok: res.ok,
+        data: data,
+        isArray: Array.isArray(data),
+        length: Array.isArray(data) ? data.length : 'N/A',
+      });
+
+      if (res.ok && Array.isArray(data)) {
+        console.log('Users fetched successfully:', data.length, 'users');
+        console.log('First few users:', data.slice(0, 3));
+        setUsers(data);
+        setFilteredUsers(data);
+      } else {
+        console.error('Error fetching users:', data.error);
+        setError('Error al cargar usuarios: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Network error fetching users:', error);
+      setError('Error de red al cargar usuarios');
     }
   };
 
@@ -382,20 +425,31 @@ export default function RecurringBookingsPage() {
                   />
                   {showUserDropdown && userSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
-                      {filteredUsers.map((user) => (
-                        <div
-                          key={user.id}
-                          onClick={() => {
-                            setSelectedUser(user.id);
-                            setSelectedUserInfo(user);
-                            setUserSearchTerm(user.full_name || user.email);
-                            setShowUserDropdown(false);
-                          }}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
-                        >
-                          {user.full_name} ({user.email})
+                      {filteredUsers.length === 0 ? (
+                        <div className="px-3 py-2 text-neutral-muted">
+                          No se encontraron usuarios. Total cargados: {users.length}
                         </div>
-                      ))}
+                      ) : (
+                        <>
+                          <div className="px-3 py-2 text-xs text-neutral-muted border-b border-muted">
+                            {filteredUsers.length} usuarios encontrados
+                          </div>
+                          {filteredUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              onClick={() => {
+                                setSelectedUser(user.id);
+                                setSelectedUserInfo(user);
+                                setUserSearchTerm(user.full_name || user.email);
+                                setShowUserDropdown(false);
+                              }}
+                              className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
+                            >
+                              {user.full_name || 'Sin nombre'} ({user.email})
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </>
