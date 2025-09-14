@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,10 +124,54 @@ export default function LoginPage() {
     setMessage('');
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    if (!email.trim()) {
+      setMessage('❌ Por favor ingresa tu email');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        if (error.message.includes('429') || error.message.includes('Too many requests')) {
+          setMessage(
+            '❌ Demasiados intentos. Por favor espera unos minutos antes de intentar nuevamente.',
+          );
+        } else {
+          setMessage(`❌ ${error.message}`);
+        }
+      } else {
+        setShowResetModal(true);
+        setMessage('');
+      }
+    } catch (resetError) {
+      console.error('Password reset exception:', resetError);
+      setMessage('❌ Error inesperado. Por favor intenta nuevamente.');
+    }
+
+    setLoading(false);
+  };
+
+  const handleCloseResetModal = () => {
+    setShowResetModal(false);
+    setIsForgotPassword(false);
+    setEmail('');
+    setMessage('');
+  };
+
   return (
     <div className="flex justify-center items-center min-h-screen bg-background">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={isForgotPassword ? handleForgotPassword : handleSubmit}
         className="bg-surface-light shadow-xl rounded-xl p-8 w-full max-w-md space-y-6 border border-muted"
       >
         {/* Header */}
@@ -134,16 +180,24 @@ export default function LoginPage() {
             <span className="text-dark font-bold text-2xl">MP</span>
           </div>
           <h1 className="text-3xl font-bold text-neutral mb-2">
-            {isRegister ? 'Registrarse' : 'Iniciar Sesión'}
+            {isForgotPassword
+              ? 'Recuperar Contraseña'
+              : isRegister
+                ? 'Registrarse'
+                : 'Iniciar Sesión'}
           </h1>
           <p className="text-neutral-muted">
-            {isRegister ? 'Crea tu cuenta en Mundo Padel' : 'Accede a tu cuenta'}
+            {isForgotPassword
+              ? 'Te enviaremos un enlace para restablecer tu contraseña'
+              : isRegister
+                ? 'Crea tu cuenta en Mundo Padel'
+                : 'Accede a tu cuenta'}
           </p>
         </div>
 
-        {isRegister && (
+        {isRegister && !isForgotPassword && (
           <div>
-            <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+            <label className="flex items-center gap-2 mb-2 text-neutral font-medium">
               <User size={16} className="text-accent" />
               Nombre Completo *
             </label>
@@ -159,7 +213,7 @@ export default function LoginPage() {
         )}
 
         <div>
-          <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+          <label className="flex items-center gap-2 mb-2 text-neutral font-medium">
             <Mail size={16} className="text-accent" />
             Email *
           </label>
@@ -173,9 +227,9 @@ export default function LoginPage() {
           />
         </div>
 
-        {isRegister && (
+        {isRegister && !isForgotPassword && (
           <div>
-            <label className="block mb-2 flex items-center gap-2 text-neutral font-medium">
+            <label className="flex items-center gap-2 mb-2 text-neutral font-medium">
               <Phone size={16} className="text-accent" />
               Teléfono *
             </label>
@@ -207,22 +261,24 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div>
-          <label className="block mb-2 text-neutral font-medium">Contraseña *</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-            placeholder={isRegister ? 'Mínimo 6 caracteres' : 'Tu contraseña'}
-          />
-          {isRegister && (
-            <p className="text-xs text-neutral-muted mt-2">
-              La contraseña debe tener al menos 6 caracteres
-            </p>
-          )}
-        </div>
+        {!isForgotPassword && (
+          <div>
+            <label className="block mb-2 text-neutral font-medium">Contraseña *</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border border-muted rounded-lg px-4 py-3 bg-surface text-neutral placeholder-neutral-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
+              placeholder={isRegister ? 'Mínimo 6 caracteres' : 'Tu contraseña'}
+            />
+            {isRegister && (
+              <p className="text-xs text-neutral-muted mt-2">
+                La contraseña debe tener al menos 6 caracteres
+              </p>
+            )}
+          </div>
+        )}
 
         {message && (
           <div
@@ -242,30 +298,68 @@ export default function LoginPage() {
           className="w-full bg-accent text-dark font-semibold px-6 py-3 rounded-lg hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md"
         >
           {loading
-            ? isRegister
-              ? 'Registrando...'
-              : 'Iniciando sesión...'
-            : isRegister
-              ? 'Registrarse'
-              : 'Iniciar Sesión'}
+            ? isForgotPassword
+              ? 'Enviando...'
+              : isRegister
+                ? 'Registrando...'
+                : 'Iniciando sesión...'
+            : isForgotPassword
+              ? 'Enviar Enlace'
+              : isRegister
+                ? 'Registrarse'
+                : 'Iniciar Sesión'}
         </button>
 
-        <div className="text-center">
-          <p className="text-sm text-neutral-muted">
-            {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(!isRegister);
-                setMessage('');
-                setFullName('');
-                setPhone('');
-              }}
-              className="text-accent hover:text-accent-hover font-medium transition-colors"
-            >
-              {isRegister ? 'Iniciar Sesión' : 'Registrarse'}
-            </button>
-          </p>
+        <div className="text-center space-y-3">
+          {!isForgotPassword && (
+            <p className="text-sm text-neutral-muted">
+              {isRegister ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(!isRegister);
+                  setMessage('');
+                  setFullName('');
+                  setPhone('');
+                }}
+                className="text-accent hover:text-accent-hover font-medium transition-colors"
+              >
+                {isRegister ? 'Iniciar Sesión' : 'Registrarse'}
+              </button>
+            </p>
+          )}
+
+          {!isRegister && !isForgotPassword && (
+            <p className="text-sm text-neutral-muted">
+              ¿Olvidaste tu contraseña?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(true);
+                  setMessage('');
+                }}
+                className="text-accent hover:text-accent-hover font-medium transition-colors"
+              >
+                Recuperar contraseña
+              </button>
+            </p>
+          )}
+
+          {isForgotPassword && (
+            <p className="text-sm text-neutral-muted">
+              ¿Recordaste tu contraseña?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setMessage('');
+                }}
+                className="text-accent hover:text-accent-hover font-medium transition-colors"
+              >
+                Volver al login
+              </button>
+            </p>
+          )}
         </div>
       </form>
 
@@ -332,6 +426,81 @@ export default function LoginPage() {
                   onClick={() => {
                     setShowVerificationModal(false);
                     setIsRegister(false);
+                    setMessage('');
+                  }}
+                  className="bg-muted text-neutral px-4 py-3 rounded-lg hover:bg-muted-light transition-all"
+                >
+                  Ir al Login
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-dark bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-light rounded-xl p-8 max-w-md w-full border border-muted shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-6">
+                <Mail size={32} className="text-light" />
+              </div>
+              <h2 className="text-2xl font-bold mb-4 text-neutral">¡Enlace enviado!</h2>
+
+              <div className="bg-accent/10 border border-accent rounded-lg p-4 mb-6">
+                <p className="text-neutral mb-2 font-medium">
+                  📧 <strong>Enlace de recuperación enviado</strong>
+                </p>
+                <p className="text-sm text-neutral-muted">
+                  Hemos enviado un enlace para restablecer tu contraseña a:
+                </p>
+                <p className="text-sm font-medium text-accent mt-1">{email}</p>
+              </div>
+
+              <div className="text-left bg-surface border border-muted rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-neutral mb-3">
+                  📋 Pasos para restablecer tu contraseña:
+                </h3>
+                <ol className="text-sm text-neutral space-y-3">
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>Revisa tu bandeja de entrada (y carpeta de spam)</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>Haz clic en el enlace de recuperación del email</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="bg-accent text-dark rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>Ingresa tu nueva contraseña</span>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="bg-warning/10 border border-warning rounded-lg p-4 mb-6">
+                <p className="text-sm text-warning font-medium">
+                  ⏰ <strong>Importante:</strong> El enlace de recuperación expira en 1 hora
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCloseResetModal}
+                  className="flex-1 bg-accent text-dark font-semibold px-4 py-3 rounded-lg hover:bg-accent-hover transition-all"
+                >
+                  Entendido
+                </button>
+                <button
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setIsForgotPassword(false);
                     setMessage('');
                   }}
                   className="bg-muted text-neutral px-4 py-3 rounded-lg hover:bg-muted-light transition-all"
