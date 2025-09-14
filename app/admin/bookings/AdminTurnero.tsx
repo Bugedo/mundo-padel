@@ -1,6 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import {
+  getBuenosAiresDate,
+  formatDateForAPI,
+  isBookingExpiredBuenosAires,
+  formatDateForDisplay
+} from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
@@ -94,11 +100,10 @@ export default function AdminTurnero({
   const [commentValue, setCommentValue] = useState('');
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
 
     const res = await fetch(`/api/bookings?date=${dateString}`, { cache: 'no-store' });
     const data = await res.json();
@@ -144,7 +149,7 @@ export default function AdminTurnero({
   // Timer que actualiza cada segundo para reservas pendientes
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = Date.now();
+      const now = getBuenosAiresDate().getTime();
       const updated: { [id: string]: number } = {};
 
       bookings.forEach((b) => {
@@ -329,7 +334,7 @@ export default function AdminTurnero({
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
         const active =
-          (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
+          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       });
 
@@ -367,7 +372,7 @@ export default function AdminTurnero({
     if (!selectedSlot || !selectedUser) return;
     // Note: We don't need to check canFitDuration here since we already validated when selecting the slot
 
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
 
     const [h, m] = selectedSlot.split(':').map(Number);
     const startMinutes = h * 60 + m;
@@ -435,12 +440,7 @@ export default function AdminTurnero({
             ← Día anterior
           </button>
           <span className="font-semibold text-neutral">
-            {selectedDate.toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
+            {formatDateForDisplay(selectedDate)}
           </span>
           <button
             onClick={() => changeDate(1)}

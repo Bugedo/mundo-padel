@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
+import { getDayOfWeekBuenosAires, isBookingExpiredBuenosAires } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,7 +48,7 @@ export async function GET(req: Request) {
 // Helper function to generate recurring bookings for a specific date
 async function generateRecurringBookingsForDate(date: string) {
   const dateObj = new Date(date);
-  const dayOfWeek = dateObj.getDay(); // 0-6 (Sunday-Saturday)
+  const dayOfWeek = getDayOfWeekBuenosAires(dateObj); // 0-6 (Sunday-Saturday)
 
   // Get all active recurring bookings for this day of week
   const { data: recurringBookings, error: recurringError } = await supabaseAdmin
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
       const bookingEndMinutes = eh * 60 + em;
 
       const active =
-        booking.confirmed || (booking.expires_at && new Date(booking.expires_at) > new Date());
+        booking.confirmed || (booking.expires_at && !isBookingExpiredBuenosAires(booking.expires_at));
 
       if (!active) return false;
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from 'react';
 import { useUser } from '@/context/UserContext';
 import { useRouter } from 'next/navigation';
 import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, RotateCcw } from 'lucide-react';
+import { isBookingExpiredBuenosAires, formatDateForDisplay, getDayNameBuenosAires } from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
@@ -90,7 +91,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (booking.confirmed) {
       return <CheckCircle size={16} className="text-neutral" />;
     }
-    if (booking.expires_at && new Date(booking.expires_at) < new Date()) {
+    if (booking.expires_at && isBookingExpiredBuenosAires(booking.expires_at)) {
       return <XCircle size={16} className="text-error" />;
     }
     return <AlertCircle size={16} className="text-neutral" />;
@@ -103,7 +104,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (booking.confirmed) {
       return 'Confirmada';
     }
-    if (booking.expires_at && new Date(booking.expires_at) < new Date()) {
+    if (booking.expires_at && isBookingExpiredBuenosAires(booking.expires_at)) {
       return 'Expirada';
     }
     return 'Pendiente';
@@ -116,7 +117,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (booking.confirmed) {
       return 'text-neutral';
     }
-    if (booking.expires_at && new Date(booking.expires_at) < new Date()) {
+    if (booking.expires_at && isBookingExpiredBuenosAires(booking.expires_at)) {
       return 'text-error';
     }
     return 'text-neutral';
@@ -126,20 +127,14 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
     if (!dateString) return 'Fecha no disponible';
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
+      return formatDateForDisplay(date);
     } catch {
       return 'Fecha inválida';
     }
   };
 
   const getDayName = (dayNumber: number) => {
-    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    return days[dayNumber];
+    return getDayNameBuenosAires(dayNumber);
   };
 
   const formatTime = (timeString: string) => {
@@ -153,11 +148,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
 
   const isExpired = (booking: Booking) => {
     if (!booking.expires_at) return false;
-    try {
-      return new Date(booking.expires_at) < new Date();
-    } catch {
-      return false;
-    }
+    return isBookingExpiredBuenosAires(booking.expires_at);
   };
 
   if (loading || loadingBookings) {
@@ -235,7 +226,7 @@ export default function UserBookingsPage({ params }: { params: Promise<{ user: s
                           ⏰ Esta reserva expira el{' '}
                           {(() => {
                             try {
-                              return new Date(booking.expires_at).toLocaleString('es-ES');
+                              return new Date(booking.expires_at).toLocaleString('es-AR');
                             } catch {
                               return 'fecha no disponible';
                             }

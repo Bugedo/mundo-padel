@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getDayOfWeekBuenosAires } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
 
     // Get recurring bookings for this day of week
     const dateObj = new Date(date);
-    const dayOfWeek = dateObj.getDay(); // 0-6 (Sunday-Saturday)
+    const dayOfWeek = getDayOfWeekBuenosAires(dateObj); // 0-6 (Sunday-Saturday)
 
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')

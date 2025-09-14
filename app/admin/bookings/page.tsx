@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminTurnero from './AdminTurnero';
+import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
@@ -23,15 +24,13 @@ interface Booking {
 }
 
 export default function BookingsAdminPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getBuenosAiresDate());
   const [, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
   const fetchBookings = useCallback(async () => {
     setLoading(true);
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
 
     const res = await fetch(`/api/bookings?date=${dateString}`, { cache: 'no-store' });
     const data = await res.json();
@@ -50,7 +49,7 @@ export default function BookingsAdminPage() {
   }, [selectedDate, fetchBookings]);
 
   const updateBooking = async (id: string, field: keyof Booking, value: boolean) => {
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
     const res = await fetch(`/api/bookings?date=${dateString}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
+import { getBuenosAiresDate, getDayOfWeekBuenosAires } from '@/lib/timezoneUtils';
 
 // Helper function to get day name
 function getDayName(dayNumber: number): string {
@@ -137,7 +138,7 @@ export async function POST(req: Request) {
     }
 
     // Check for conflicts with regular bookings in the next 6 weeks
-    const today = new Date();
+    const today = getBuenosAiresDate();
     const conflicts: Array<{ date: string; time: string; user: string }> = [];
 
     for (let i = 0; i <= 42; i++) {
@@ -145,7 +146,7 @@ export async function POST(req: Request) {
       const checkDate = new Date(today);
       checkDate.setDate(today.getDate() + i);
       const checkDateString = checkDate.toISOString().split('T')[0];
-      const checkDayOfWeek = checkDate.getDay();
+      const checkDayOfWeek = getDayOfWeekBuenosAires(checkDate);
 
       if (checkDayOfWeek === day_of_week) {
         // Check if there are regular bookings on this date that conflict

@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
+import {
+  getBuenosAiresDate,
+  formatDateForAPI,
+  getAvailableDatesBuenosAires,
+  getDayOfWeekBuenosAires,
+  isTodayBuenosAires,
+  isBookingExpiredBuenosAires
+} from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
@@ -69,7 +77,7 @@ const allSlots = [
 
 export default function Turnero() {
   const { user, loading } = useUser();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getBuenosAiresDate());
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -78,24 +86,14 @@ export default function Turnero() {
   const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-  // Generar los 7 días disponibles (hoy + 6 posteriores)
+  // Generar los 7 días disponibles (hoy + 6 posteriores) en horario de Buenos Aires
   const getAvailableDates = (): Date[] => {
-    const dates: Date[] = [];
-    const today = new Date();
-
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push(date);
-    }
-
-    return dates;
+    return getAvailableDatesBuenosAires();
   };
 
   const formatDayName = (date: Date) => {
-    return date.toLocaleDateString('es-ES', { weekday: 'short' });
+    return date.toLocaleDateString('es-AR', { weekday: 'short' });
   };
 
   const formatDayNumber = (date: Date) => {
@@ -103,12 +101,11 @@ export default function Turnero() {
   };
 
   const formatMonth = (date: Date) => {
-    return date.toLocaleDateString('es-ES', { month: 'short' });
+    return date.toLocaleDateString('es-AR', { month: 'short' });
   };
 
   const isToday = (date: Date) => {
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
+    return isTodayBuenosAires(date);
   };
 
   const isSelected = (date: Date) => {
@@ -116,7 +113,7 @@ export default function Turnero() {
   };
 
   const fetchBookings = useCallback(async () => {
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
 
     // Use public endpoint to get bookings for the date
     const response = await fetch(`/api/public-bookings?date=${dateString}`, {
@@ -133,9 +130,8 @@ export default function Turnero() {
 
   // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
-    const dateString = formatDate(selectedDate);
-    const selectedDateObj = new Date(selectedDate);
-    const dayOfWeek = selectedDateObj.getDay(); // 0-6 (Sunday-Saturday)
+    const dateString = formatDateForAPI(selectedDate);
+    const dayOfWeek = getDayOfWeekBuenosAires(selectedDate); // 0-6 (Sunday-Saturday)
 
     const { data, error } = await supabase
       .from('recurring_bookings')
@@ -187,7 +183,7 @@ export default function Turnero() {
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
       const active =
-        (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
+        (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
       return active && checkMinutes >= bStart && checkMinutes < bEnd;
     });
 
@@ -211,7 +207,7 @@ export default function Turnero() {
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
         const active =
-          (b.confirmed || (b.expires_at && new Date(b.expires_at) > new Date())) && !b.cancelled;
+          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       });
 
@@ -247,7 +243,7 @@ export default function Turnero() {
       return;
     }
 
-    const dateString = formatDate(selectedDate);
+    const dateString = formatDateForAPI(selectedDate);
 
     const [h, m] = selectedSlot.split(':').map(Number);
     const startMinutes = h * 60 + m;
