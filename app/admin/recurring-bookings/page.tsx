@@ -93,6 +93,25 @@ export default function RecurringBookingsPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
+  // Edit form state
+  const [editingBooking, setEditingBooking] = useState<RecurringBooking | null>(null);
+  const [editForm, setEditForm] = useState({
+    user_id: '',
+    court: 1 as 1 | 2 | 3,
+    day_of_week: 0,
+    start_time: '',
+    end_time: '',
+    duration_minutes: 90 as 60 | 90 | 120,
+    start_date: '',
+    end_date: '',
+    active: true
+  });
+  const [editUserSearchTerm, setEditUserSearchTerm] = useState('');
+  const [editFilteredUsers, setEditFilteredUsers] = useState<User[]>([]);
+  const [showEditUserDropdown, setShowEditUserDropdown] = useState(false);
+  const [editSelectedUserInfo, setEditSelectedUserInfo] = useState<User | null>(null);
+  const [showEditEarlySlots, setShowEditEarlySlots] = useState(false);
+
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
   // Fetch recurring bookings and users on component mount
@@ -134,6 +153,22 @@ export default function RecurringBookingsPage() {
     console.log('Filtered users result:', filtered.length, 'users found');
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
+
+  // Filter users for edit form
+  useEffect(() => {
+    if (!editUserSearchTerm.trim()) {
+      setEditFilteredUsers(users);
+      return;
+    }
+
+    const filtered = users.filter((user) => {
+      const nameMatch = user.full_name?.toLowerCase().includes(editUserSearchTerm.toLowerCase());
+      const emailMatch = user.email.toLowerCase().includes(editUserSearchTerm.toLowerCase());
+      return nameMatch || emailMatch;
+    });
+
+    setEditFilteredUsers(filtered);
+  }, [editUserSearchTerm, users]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -350,6 +385,94 @@ export default function RecurringBookingsPage() {
       }
     } catch (error: unknown) {
       console.error('Error deleting recurring booking:', error);
+    }
+  };
+
+  const startEditBooking = (booking: RecurringBooking) => {
+    setEditingBooking(booking);
+    setEditForm({
+      user_id: booking.user_id,
+      court: booking.court as 1 | 2 | 3,
+      day_of_week: booking.day_of_week,
+      start_time: booking.start_time,
+      end_time: booking.end_time,
+      duration_minutes: booking.duration_minutes as 60 | 90 | 120,
+      start_date: booking.start_date || '',
+      end_date: booking.end_date || '',
+      active: booking.active
+    });
+    
+    // Set the user info for the edit form
+    const user = users.find(u => u.id === booking.user_id);
+    if (user) {
+      setEditSelectedUserInfo(user);
+      setEditUserSearchTerm(user.full_name || user.email);
+    }
+    
+    setShowEditEarlySlots(booking.start_time < '16:30');
+  };
+
+  const cancelEdit = () => {
+    setEditingBooking(null);
+    setEditForm({
+      user_id: '',
+      court: 1,
+      day_of_week: 0,
+      start_time: '',
+      end_time: '',
+      duration_minutes: 90,
+      start_date: '',
+      end_date: '',
+      active: true
+    });
+    setEditUserSearchTerm('');
+    setEditSelectedUserInfo(null);
+    setShowEditUserDropdown(false);
+    setShowEditEarlySlots(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editingBooking) return;
+
+    // Calculate end_time from start_time and duration
+    const [h, m] = editForm.start_time.split(':').map(Number);
+    const startMinutes = h * 60 + m;
+    const endMinutes = startMinutes + editForm.duration_minutes;
+    const endH = Math.floor(endMinutes / 60) % 24;
+    const endM = endMinutes % 60;
+    const calculatedEndTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+
+    try {
+      const res = await fetch('/api/recurring-bookings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingBooking.id,
+          updates: {
+            user_id: editForm.user_id,
+            court: editForm.court,
+            day_of_week: editForm.day_of_week,
+            start_time: editForm.start_time,
+            end_time: calculatedEndTime,
+            duration_minutes: editForm.duration_minutes,
+            start_date: editForm.start_date || null,
+            end_date: editForm.end_date || null,
+            active: editForm.active
+          }
+        }),
+      });
+
+      if (res.ok) {
+        alert('Reserva recurrente actualizada exitosamente');
+        await fetchRecurringBookings();
+        cancelEdit();
+      } else {
+        const data = await res.json();
+        alert(`Error al actualizar reserva recurrente: ${data.error}`);
+      }
+    } catch (error: unknown) {
+      console.error('Error updating recurring booking:', error);
+      alert('Error de red al actualizar reserva recurrente');
     }
   };
 
@@ -579,11 +702,17 @@ export default function RecurringBookingsPage() {
 
               <div className="flex gap-2">
                 <button
+                  onClick={() => startEditBooking(booking)}
+                  className="bg-accent text-dark px-3 py-1 rounded hover:bg-accent-hover transition-colors"
+                >
+                  Editar
+                </button>
+                <button
                   onClick={() => updateRecurringBooking(booking.id, 'active', !booking.active)}
                   className={`px-3 py-1 rounded ${
                     booking.active
                       ? 'bg-success text-light hover:bg-success/80'
-                      : 'bg-accent text-neutral hover:bg-accent-hover'
+                      : 'bg-warning text-light hover:bg-warning/80'
                   }`}
                 >
                   {booking.active ? 'Activa' : 'Inactiva'}
@@ -605,6 +734,202 @@ export default function RecurringBookingsPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editingBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-surface p-6 rounded-lg border border-muted max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-neutral">Editar Reserva Recurrente</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* User selection */}
+              <div className="user-dropdown-container">
+                <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
+                {editSelectedUserInfo ? (
+                  <div className="border border-muted rounded px-3 py-2 bg-surface">
+                    <p className="font-medium text-neutral">{editSelectedUserInfo.full_name}</p>
+                    <p className="text-sm text-neutral">{editSelectedUserInfo.email}</p>
+                    <button
+                      onClick={() => {
+                        setEditForm({ ...editForm, user_id: '' });
+                        setEditSelectedUserInfo(null);
+                        setEditUserSearchTerm('');
+                      }}
+                      className="text-sm text-error hover:underline mt-1"
+                    >
+                      Cambiar usuario
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre o email..."
+                      value={editUserSearchTerm}
+                      onChange={(e) => {
+                        setEditUserSearchTerm(e.target.value);
+                        setShowEditUserDropdown(true);
+                      }}
+                      onFocus={() => setShowEditUserDropdown(true)}
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                    />
+                    {showEditUserDropdown && editUserSearchTerm && (
+                      <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
+                        {editFilteredUsers.length === 0 ? (
+                          <div className="px-3 py-2 text-neutral-muted">
+                            No se encontraron usuarios. Total cargados: {users.length}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="px-3 py-2 text-xs text-neutral-muted border-b border-muted">
+                              {editFilteredUsers.length} usuarios encontrados
+                            </div>
+                            {editFilteredUsers.map((user) => (
+                              <div
+                                key={user.id}
+                                onClick={() => {
+                                  setEditForm({ ...editForm, user_id: user.id });
+                                  setEditSelectedUserInfo(user);
+                                  setEditUserSearchTerm(user.full_name || user.email);
+                                  setShowEditUserDropdown(false);
+                                }}
+                                className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
+                              >
+                                {user.full_name || 'Sin nombre'} ({user.email})
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Day of week */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Día de la semana</label>
+                <select
+                  value={editForm.day_of_week}
+                  onChange={(e) => setEditForm({ ...editForm, day_of_week: Number(e.target.value) })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                >
+                  {daysOfWeek.map((day) => (
+                    <option key={day.value} value={day.value}>
+                      {day.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Time selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Horario</label>
+                <div className="mb-2">
+                  <button
+                    onClick={() => setShowEditEarlySlots(!showEditEarlySlots)}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {showEditEarlySlots ? 'Ocultar horarios tempranos' : 'Mostrar horarios tempranos'}
+                  </button>
+                </div>
+                <select
+                  value={editForm.start_time}
+                  onChange={(e) => setEditForm({ ...editForm, start_time: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                >
+                  <option value="">Seleccionar horario</option>
+                  {(showEditEarlySlots ? allSlots : defaultSlots).map((slot) => (
+                    <option key={slot.start} value={slot.start}>
+                      {slot.start} - {slot.end}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Duration */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Duración</label>
+                <select
+                  value={editForm.duration_minutes}
+                  onChange={(e) => setEditForm({ ...editForm, duration_minutes: Number(e.target.value) as 60 | 90 | 120 })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                >
+                  <option value={60}>60 minutos</option>
+                  <option value={90}>90 minutos</option>
+                  <option value={120}>120 minutos</option>
+                </select>
+              </div>
+
+              {/* Court */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Cancha</label>
+                <select
+                  value={editForm.court}
+                  onChange={(e) => setEditForm({ ...editForm, court: Number(e.target.value) as 1 | 2 | 3 })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                >
+                  <option value={1}>Cancha 1</option>
+                  <option value={2}>Cancha 2</option>
+                  <option value={3}>Cancha 3</option>
+                </select>
+              </div>
+
+              {/* Start date */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Fecha de inicio</label>
+                <input
+                  type="date"
+                  value={editForm.start_date}
+                  onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                />
+              </div>
+
+              {/* End date */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Fecha de fin (opcional)</label>
+                <input
+                  type="date"
+                  value={editForm.end_date}
+                  onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
+                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                />
+              </div>
+
+              {/* Active status */}
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={editForm.active}
+                    onChange={(e) => setEditForm({ ...editForm, active: e.target.checked })}
+                    className="rounded"
+                  />
+                  <span className="text-neutral">Reserva activa</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-4">
+              <button
+                onClick={cancelEdit}
+                className="flex-1 bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={!editForm.user_id || !editForm.start_time}
+                className="flex-1 bg-success text-light px-4 py-2 rounded hover:bg-success-light disabled:bg-muted disabled:text-neutral-muted transition-colors"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
