@@ -20,6 +20,14 @@ function ResetPasswordForm() {
     // Check if we have the necessary tokens in the URL
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
+    const type = searchParams.get('type');
+
+    console.log('Reset password page - URL params:', {
+      accessToken: accessToken ? 'present' : 'missing',
+      refreshToken: refreshToken ? 'present' : 'missing',
+      type,
+      fullUrl: window.location.href
+    });
 
     if (accessToken && refreshToken) {
       // Set the session with the tokens from the URL
@@ -35,10 +43,12 @@ function ResetPasswordForm() {
               '❌ Enlace inválido o expirado. Por favor solicita un nuevo enlace de recuperación.',
             );
           } else {
+            console.log('Session set successfully');
             setIsValidSession(true);
           }
         });
     } else {
+      console.log('Missing tokens in URL');
       setMessage('❌ Enlace inválido. Por favor solicita un nuevo enlace de recuperación.');
     }
   }, [searchParams]);
