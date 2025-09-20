@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/bookings/auto-process",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

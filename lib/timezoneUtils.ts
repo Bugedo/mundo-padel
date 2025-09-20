@@ -11,24 +11,24 @@ const BUENOS_AIRES_OFFSET = -3 * 60; // -3 hours in minutes
  */
 export function getBuenosAiresDate(): Date {
   const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  return new Date(utc + (BUENOS_AIRES_OFFSET * 60000));
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + BUENOS_AIRES_OFFSET * 60000);
 }
 
 /**
  * Convert a UTC date to Buenos Aires timezone
  */
 export function toBuenosAiresDate(date: Date): Date {
-  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-  return new Date(utc + (BUENOS_AIRES_OFFSET * 60000));
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  return new Date(utc + BUENOS_AIRES_OFFSET * 60000);
 }
 
 /**
  * Convert a Buenos Aires date to UTC for database storage
  */
 export function toUTC(date: Date): Date {
-  const buenosAires = date.getTime() - (BUENOS_AIRES_OFFSET * 60000);
-  return new Date(buenosAires - (date.getTimezoneOffset() * 60000));
+  const buenosAires = date.getTime() - BUENOS_AIRES_OFFSET * 60000;
+  return new Date(buenosAires - date.getTimezoneOffset() * 60000);
 }
 
 /**
@@ -51,7 +51,10 @@ export function getTodayBuenosAires(): string {
  * 0 = Sunday, 1 = Monday, ..., 6 = Saturday
  */
 export function getDayOfWeekBuenosAires(date: Date): number {
-  return toBuenosAiresDate(date).getDay();
+  // For day of week calculation, we should use the local date without timezone conversion
+  // because we want the day of the week as it appears in Buenos Aires, not the UTC day
+  const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return localDate.getDay();
 }
 
 /**
@@ -60,10 +63,12 @@ export function getDayOfWeekBuenosAires(date: Date): number {
 export function isTodayBuenosAires(date: Date): boolean {
   const today = getBuenosAiresDate();
   const targetDate = toBuenosAiresDate(date);
-  
-  return today.getFullYear() === targetDate.getFullYear() &&
-         today.getMonth() === targetDate.getMonth() &&
-         today.getDate() === targetDate.getDate();
+
+  return (
+    today.getFullYear() === targetDate.getFullYear() &&
+    today.getMonth() === targetDate.getMonth() &&
+    today.getDate() === targetDate.getDate()
+  );
 }
 
 /**
@@ -72,11 +77,11 @@ export function isTodayBuenosAires(date: Date): boolean {
 export function isPastDateBuenosAires(date: Date): boolean {
   const today = getBuenosAiresDate();
   const targetDate = toBuenosAiresDate(date);
-  
+
   // Set time to start of day for comparison
   today.setHours(0, 0, 0, 0);
   targetDate.setHours(0, 0, 0, 0);
-  
+
   return targetDate < today;
 }
 
@@ -85,10 +90,10 @@ export function isPastDateBuenosAires(date: Date): boolean {
  */
 export function isBookingExpiredBuenosAires(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
-  
+
   const now = getBuenosAiresDate();
   const expiryDate = new Date(expiresAt);
-  
+
   return now > expiryDate;
 }
 
@@ -98,13 +103,13 @@ export function isBookingExpiredBuenosAires(expiresAt: string | null): boolean {
 export function getAvailableDatesBuenosAires(): Date[] {
   const dates: Date[] = [];
   const today = getBuenosAiresDate();
-  
+
   for (let i = 0; i < 7; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     dates.push(date);
   }
-  
+
   return dates;
 }
 
@@ -117,7 +122,7 @@ export function formatDateForDisplay(date: Date): string {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   });
 }
 
@@ -125,15 +130,7 @@ export function formatDateForDisplay(date: Date): string {
  * Get day name in Spanish for Buenos Aires timezone
  */
 export function getDayNameBuenosAires(dayNumber: number): string {
-  const days = [
-    'Domingo',
-    'Lunes', 
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado'
-  ];
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   return days[dayNumber] || '';
 }
 

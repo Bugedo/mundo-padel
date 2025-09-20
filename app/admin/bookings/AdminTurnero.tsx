@@ -5,7 +5,6 @@ import {
   getBuenosAiresDate,
   formatDateForAPI,
   isBookingExpiredBuenosAires,
-  formatDateForDisplay
 } from '@/lib/timezoneUtils';
 
 interface Booking {
@@ -36,6 +35,44 @@ interface AdminTurneroProps {
   onDateChange: (date: Date) => void;
   onBookingUpdate: (id: string, field: keyof Booking, value: boolean) => Promise<void>;
 }
+
+// Helper functions for week navigation
+const getWeekDates = (date: Date): Date[] => {
+  const weekDates: Date[] = [];
+  const startOfWeek = new Date(date);
+
+  // Get Monday of the week (day 1)
+  const dayOfWeek = date.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday is 0, so -6 to get Monday
+  startOfWeek.setDate(date.getDate() + mondayOffset);
+
+  // Generate 7 days starting from Monday
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(startOfWeek);
+    day.setDate(startOfWeek.getDate() + i);
+    weekDates.push(day);
+  }
+
+  return weekDates;
+};
+
+const formatDayName = (date: Date): string => {
+  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  return days[date.getDay()];
+};
+
+const formatDayNumber = (date: Date): string => {
+  return date.getDate().toString().padStart(2, '0');
+};
+
+const isSameDate = (date1: Date, date2: Date): boolean => {
+  return date1.toDateString() === date2.toDateString();
+};
+
+const isToday = (date: Date): boolean => {
+  const today = getBuenosAiresDate();
+  return isSameDate(date, today);
+};
 
 const allSlots = [
   { start: '08:00', end: '08:30' },
@@ -165,10 +202,14 @@ export default function AdminTurnero({
     return () => clearInterval(interval);
   }, [bookings]);
 
-  const changeDate = (offset: number) => {
+  const changeWeek = (offset: number) => {
     const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + offset);
+    newDate.setDate(selectedDate.getDate() + offset * 7);
     onDateChange(newDate);
+  };
+
+  const selectDate = (date: Date) => {
+    onDateChange(date);
   };
 
   const getBookingForSlot = (court: number, time: string) => {
@@ -334,7 +375,8 @@ export default function AdminTurnero({
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
         const active =
-          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
+          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
+          !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       });
 
@@ -432,21 +474,43 @@ export default function AdminTurnero({
     <div className="space-y-6">
       {/* Date navigation */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        {/* Week Navigation */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => changeDate(-1)}
+            onClick={() => changeWeek(-1)}
             className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
           >
-            ← Día anterior
+            ← Semana anterior
           </button>
-          <span className="font-semibold text-neutral">
-            {formatDateForDisplay(selectedDate)}
-          </span>
+
+          {/* Week Days Selector */}
+          <div className="flex gap-1">
+            {getWeekDates(selectedDate).map((date, index) => (
+              <button
+                key={index}
+                onClick={() => selectDate(date)}
+                className={`
+                  flex flex-col items-center p-2 rounded transition-colors min-w-[50px]
+                  ${
+                    isSameDate(date, selectedDate)
+                      ? 'bg-accent text-dark font-semibold'
+                      : isToday(date)
+                        ? 'bg-accent/20 text-accent border-2 border-accent'
+                        : 'bg-surface text-neutral hover:bg-accent/10'
+                  }
+                `}
+              >
+                <span className="text-xs font-medium">{formatDayName(date)}</span>
+                <span className="text-sm">{formatDayNumber(date)}</span>
+              </button>
+            ))}
+          </div>
+
           <button
-            onClick={() => changeDate(1)}
+            onClick={() => changeWeek(1)}
             className="bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
           >
-            Día siguiente →
+            Semana siguiente →
           </button>
         </div>
 

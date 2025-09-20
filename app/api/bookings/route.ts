@@ -49,6 +49,15 @@ export async function GET(req: Request) {
 async function generateRecurringBookingsForDate(date: string) {
   const dateObj = new Date(date);
   const dayOfWeek = getDayOfWeekBuenosAires(dateObj); // 0-6 (Sunday-Saturday)
+  const nativeDayOfWeek = dateObj.getDay(); // Native JavaScript day of week
+
+  console.log(`Generating recurring bookings for ${date}`);
+  console.log(
+    `  - Native day of week: ${nativeDayOfWeek} (${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][nativeDayOfWeek]})`,
+  );
+  console.log(
+    `  - Buenos Aires day of week: ${dayOfWeek} (${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek]})`,
+  );
 
   // Get all active recurring bookings for this day of week
   const { data: recurringBookings, error: recurringError } = await supabaseAdmin
@@ -62,12 +71,16 @@ async function generateRecurringBookingsForDate(date: string) {
     return;
   }
 
+  console.log(`Found ${recurringBookings?.length || 0} recurring bookings for day ${dayOfWeek}`);
+
   if (!recurringBookings || recurringBookings.length === 0) {
     return;
   }
 
   // For each recurring booking, check if it should be active on this date
   for (const recurring of recurringBookings) {
+    console.log(`Processing recurring booking ${recurring.id} for user ${recurring.user_id}`);
+
     // Check if there's already a booking for this recurring booking on this date
     const { data: existingBooking } = await supabaseAdmin
       .from('bookings')
@@ -77,13 +90,16 @@ async function generateRecurringBookingsForDate(date: string) {
       .single();
 
     if (existingBooking) {
+      console.log(`Booking already exists for recurring ${recurring.id} on ${date}`);
       continue;
     }
 
     const shouldBeActive = shouldRecurringBookingBeActive(recurring, date);
+    console.log(`Should be active: ${shouldBeActive} for recurring ${recurring.id}`);
 
     // If no booking exists and the recurring booking should be active on this date
     if (shouldBeActive) {
+      console.log(`Creating booking for recurring ${recurring.id} on ${date}`);
       // Create the booking
       const { error: insertError } = await supabaseAdmin
         .from('bookings')
@@ -106,6 +122,8 @@ async function generateRecurringBookingsForDate(date: string) {
 
       if (insertError) {
         console.error(`Error creating booking for recurring ${recurring.id}:`, insertError);
+      } else {
+        console.log(`Successfully created booking for recurring ${recurring.id} on ${date}`);
       }
     }
   }
@@ -131,6 +149,106 @@ function shouldRecurringBookingBeActive(
   }
 
   return true;
+}
+
+// Helper function to generate the next recurring booking when a booking is completed
+async function generateNextRecurringBooking(
+  completedBooking: Record<string, string | number | boolean>,
+) {
+  try {
+    // Only generate recurring bookings for bookings that have a recurring_booking_id
+    if (!completedBooking.recurring_booking_id) {
+      return;
+    }
+
+    const currentDate = new Date(completedBooking.date as string);
+
+    // Get the recurring booking template
+    const { data: recurringBooking, error: recurringError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .eq('id', completedBooking.recurring_booking_id)
+      .eq('active', true)
+      .single();
+
+    if (recurringError || !recurringBooking) {
+      console.log('Recurring booking not found or inactive:', recurringError);
+      return;
+    }
+
+    // Calculate next booking date (2 weeks later)
+    const nextDate = new Date(currentDate);
+    nextDate.setDate(currentDate.getDate() + 14);
+    const nextDateString = nextDate.toISOString().split('T')[0];
+
+    // Check if there's already a booking for this recurring booking on the next date
+    const { data: existingBooking } = await supabaseAdmin
+      .from('bookings')
+      .select('id')
+      .eq('date', nextDateString)
+      .eq('recurring_booking_id', recurringBooking.id)
+      .single();
+
+    if (existingBooking) {
+      // If booking already exists, try 14 days further in the future
+      const futureDate = new Date(nextDate);
+      futureDate.setDate(nextDate.getDate() + 14);
+      const futureDateString = futureDate.toISOString().split('T')[0];
+
+      // Check if there's already a booking for this recurring booking on the future date
+      const { data: futureExistingBooking } = await supabaseAdmin
+        .from('bookings')
+        .select('id')
+        .eq('date', futureDateString)
+        .eq('recurring_booking_id', recurringBooking.id)
+        .single();
+
+      if (futureExistingBooking) {
+        console.log(
+          'Both 2-week and 4-week slots are occupied for recurring booking:',
+          recurringBooking.id,
+        );
+        return;
+      }
+
+      // Create booking 4 weeks in the future
+      await createRecurringBookingInstance(recurringBooking, futureDateString);
+    } else {
+      // Create booking 2 weeks in the future
+      await createRecurringBookingInstance(recurringBooking, nextDateString);
+    }
+  } catch (error) {
+    console.error('Error generating next recurring booking:', error);
+  }
+}
+
+// Helper function to create a recurring booking instance
+async function createRecurringBookingInstance(
+  recurringBooking: Record<string, string | number | boolean>,
+  date: string,
+) {
+  try {
+    const { error: insertError } = await supabaseAdmin.from('bookings').insert({
+      user_id: recurringBooking.user_id,
+      court: recurringBooking.court,
+      date: date,
+      start_time: recurringBooking.start_time,
+      end_time: recurringBooking.end_time,
+      duration_minutes: recurringBooking.duration_minutes,
+      confirmed: true, // Recurring bookings are always confirmed
+      present: false,
+      cancelled: false,
+      recurring_booking_id: recurringBooking.id,
+    });
+
+    if (insertError) {
+      console.error('Error creating recurring booking instance:', insertError);
+    } else {
+      console.log(`Created recurring booking for ${date} at ${recurringBooking.start_time}`);
+    }
+  } catch (error) {
+    console.error('Error in createRecurringBookingInstance:', error);
+  }
 }
 
 export async function POST(req: Request) {
@@ -187,7 +305,8 @@ export async function POST(req: Request) {
       const bookingEndMinutes = eh * 60 + em;
 
       const active =
-        booking.confirmed || (booking.expires_at && !isBookingExpiredBuenosAires(booking.expires_at));
+        booking.confirmed ||
+        (booking.expires_at && !isBookingExpiredBuenosAires(booking.expires_at));
 
       if (!active) return false;
 
@@ -382,6 +501,11 @@ export async function PATCH(req: Request) {
 
       if (updateError) {
         return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+
+      // If marking as present (booking completed), generate next recurring booking
+      if (field === 'present' && actualValue === true) {
+        await generateNextRecurringBooking(data);
       }
 
       return NextResponse.json(data);

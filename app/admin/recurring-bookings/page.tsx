@@ -317,7 +317,7 @@ export default function RecurringBookingsPage() {
           end_time,
           duration_minutes: selectedDuration,
           start_date: startDate,
-          end_date: endDate || null,
+          end_date: endDate || null, // null means forever
         }),
       });
 
@@ -658,6 +658,9 @@ export default function RecurringBookingsPage() {
                 onChange={(e) => setEndDate(e.target.value)}
                 className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
+              <p className="text-xs text-neutral-muted mt-1">
+                Deja vacío para que la reserva sea permanente (para siempre)
+              </p>
             </div>
 
             {/* Create button */}
@@ -895,6 +898,9 @@ export default function RecurringBookingsPage() {
                   onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                 />
+                <p className="text-xs text-neutral-muted mt-1">
+                  Deja vacío para que la reserva sea permanente (para siempre)
+                </p>
               </div>
 
               {/* Active status */}

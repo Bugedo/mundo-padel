@@ -216,6 +216,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
+    // Create the first instance of the recurring booking if start_date is provided
+    if (start_date) {
+      try {
+        const { error: bookingError } = await supabaseAdmin
+          .from('bookings')
+          .insert({
+            user_id,
+            court,
+            date: start_date,
+            start_time,
+            end_time,
+            duration_minutes,
+            confirmed: true, // Recurring bookings are always confirmed
+            present: false,
+            cancelled: false,
+            recurring_booking_id: data.id,
+          });
+
+        if (bookingError) {
+          console.error('Error creating first recurring booking instance:', bookingError);
+          // Don't fail the entire operation, just log the error
+        } else {
+          console.log(`Created first recurring booking instance for ${start_date} at ${start_time}`);
+        }
+      } catch (error) {
+        console.error('Error in creating first recurring booking instance:', error);
+      }
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Recurring bookings POST error:', error);
