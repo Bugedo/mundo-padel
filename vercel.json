@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/bookings/auto-process",
-      "schedule": "*/30 * * * *"
+      "path": "/api/bookings/weekly-propagation",
+      "schedule": "0 3 * * 1"
     }
   ]
 }

@@ -7,52 +7,19 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-// Helper function to create a recurring booking instance
-async function createRecurringBookingInstance(
-  recurringBooking: Record<string, string | number | boolean>,
-  date: string,
-) {
-  try {
-    const { error: insertError } = await supabaseAdmin.from('bookings').insert({
-      user_id: recurringBooking.user_id,
-      court: recurringBooking.court,
-      date: date,
-      start_time: recurringBooking.start_time,
-      end_time: recurringBooking.end_time,
-      duration_minutes: recurringBooking.duration_minutes,
-      confirmed: true, // Recurring bookings are always confirmed
-      present: false,
-      cancelled: false,
-      recurring_booking_id: recurringBooking.id,
-      created_by: recurringBooking.user_id, // Add the required created_by field
-    });
-
-    if (insertError) {
-      console.error('Error creating recurring booking instance:', insertError);
-      return { success: false, error: insertError.message };
-    } else {
-      console.log(`Created recurring booking for ${date} at ${recurringBooking.start_time}`);
-      return { success: true };
-    }
-  } catch (error) {
-    console.error('Error in createRecurringBookingInstance:', error);
-    return { success: false, error: 'Unknown error' };
-  }
-}
-
-// Helper function to process completed bookings and generate next recurring bookings
+// Helper function to process completed bookings (mark as present)
 async function processCompletedBookings() {
   const now = getBuenosAiresDate();
   const today = now.toISOString().split('T')[0];
 
   // Get all bookings that should have been completed today
-  // (bookings that ended before current time and are not cancelled)
+  // (bookings that ended before current time and are not cancelled or already marked as present)
   const { data: completedBookings, error: bookingsError } = await supabaseAdmin
     .from('bookings')
     .select('*')
     .eq('date', today)
     .eq('cancelled', false)
-    .not('recurring_booking_id', 'is', null); // Only recurring bookings
+    .eq('present', false); // Only bookings not already marked as present
 
   if (bookingsError) {
     console.error('Error fetching completed bookings:', bookingsError);
@@ -78,51 +45,18 @@ async function processCompletedBookings() {
         continue;
       }
 
-      // Get the recurring booking template
-      const { data: recurringBooking, error: recurringError } = await supabaseAdmin
-        .from('recurring_bookings')
-        .select('*')
-        .eq('id', booking.recurring_booking_id)
-        .eq('active', true)
-        .single();
-
-      if (recurringError || !recurringBooking) {
-        console.log('Recurring booking not found or inactive:', recurringError);
-        continue;
-      }
-
-      // Calculate next booking date (15 days later)
-      const nextDate = new Date(booking.date);
-      nextDate.setDate(nextDate.getDate() + 15);
-      const nextDateString = nextDate.toISOString().split('T')[0];
-
-      // Check if there's already a booking for this recurring booking on the next date
-      const { data: existingBooking } = await supabaseAdmin
+      // Mark the booking as present (completed)
+      const { error: updateError } = await supabaseAdmin
         .from('bookings')
-        .select('id')
-        .eq('date', nextDateString)
-        .eq('recurring_booking_id', recurringBooking.id)
-        .single();
+        .update({ present: true })
+        .eq('id', booking.id);
 
-      if (existingBooking) {
-        console.log(`Booking already exists for ${nextDateString}, skipping`);
-        continue;
-      }
-
-      // Create the next recurring booking
-      const result = await createRecurringBookingInstance(recurringBooking, nextDateString);
-
-      if (result.success) {
-        processedCount++;
-
-        // Mark the current booking as present (completed)
-        await supabaseAdmin.from('bookings').update({ present: true }).eq('id', booking.id);
-
-        console.log(
-          `Processed booking ${booking.id} and created next booking for ${nextDateString}`,
-        );
+      if (updateError) {
+        console.error(`Error marking booking ${booking.id} as present:`, updateError);
+        errors.push(`Error marking booking ${booking.id} as present: ${updateError.message}`);
       } else {
-        errors.push(`Failed to create booking for ${nextDateString}: ${result.error}`);
+        processedCount++;
+        console.log(`✅ Marked booking ${booking.id} as completed`);
       }
     } catch (error) {
       console.error('Error processing booking:', booking.id, error);
@@ -147,13 +81,15 @@ export async function POST(req: Request) {
     console.log('Starting automatic processing of completed bookings...');
     const result = await processCompletedBookings();
 
-    console.log(`Processed ${result.processed} bookings with ${result.errors.length} errors`);
+    console.log(
+      `Marked ${result.processed} bookings as completed with ${result.errors.length} errors`,
+    );
 
     return NextResponse.json({
       success: true,
       processed: result.processed,
       errors: result.errors,
-      message: `Successfully processed ${result.processed} recurring bookings`,
+      message: `Successfully marked ${result.processed} bookings as completed`,
     });
   } catch (error) {
     console.error('Error in auto-process bookings:', error);
@@ -174,7 +110,7 @@ export async function GET() {
       success: true,
       processed: result.processed,
       errors: result.errors,
-      message: `Successfully processed ${result.processed} recurring bookings`,
+      message: `Successfully marked ${result.processed} bookings as completed`,
     });
   } catch (error) {
     console.error('Error in manual auto-process:', error);

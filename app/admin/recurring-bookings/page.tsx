@@ -104,7 +104,7 @@ export default function RecurringBookingsPage() {
     duration_minutes: 90 as 60 | 90 | 120,
     start_date: '',
     end_date: '',
-    active: true
+    active: true,
   });
   const [editUserSearchTerm, setEditUserSearchTerm] = useState('');
   const [editFilteredUsers, setEditFilteredUsers] = useState<User[]>([]);
@@ -399,16 +399,16 @@ export default function RecurringBookingsPage() {
       duration_minutes: booking.duration_minutes as 60 | 90 | 120,
       start_date: booking.start_date || '',
       end_date: booking.end_date || '',
-      active: booking.active
+      active: booking.active,
     });
-    
+
     // Set the user info for the edit form
-    const user = users.find(u => u.id === booking.user_id);
+    const user = users.find((u) => u.id === booking.user_id);
     if (user) {
       setEditSelectedUserInfo(user);
       setEditUserSearchTerm(user.full_name || user.email);
     }
-    
+
     setShowEditEarlySlots(booking.start_time < '16:30');
   };
 
@@ -423,7 +423,7 @@ export default function RecurringBookingsPage() {
       duration_minutes: 90,
       start_date: '',
       end_date: '',
-      active: true
+      active: true,
     });
     setEditUserSearchTerm('');
     setEditSelectedUserInfo(null);
@@ -457,8 +457,8 @@ export default function RecurringBookingsPage() {
             duration_minutes: editForm.duration_minutes,
             start_date: editForm.start_date || null,
             end_date: editForm.end_date || null,
-            active: editForm.active
-          }
+            active: editForm.active,
+          },
         }),
       });
 
@@ -677,63 +677,131 @@ export default function RecurringBookingsPage() {
         </div>
       )}
 
-      {/* Recurring bookings list */}
-      <div className="space-y-4">
-        {recurringBookings.map((booking) => (
-          <div key={booking.id} className="border border-muted rounded p-4 bg-surface">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-neutral">
-                  {booking.user?.full_name || 'Usuario no encontrado'}
-                </h3>
-                <p className="text-neutral">{booking.user?.email}</p>
-                <p className="text-sm text-neutral">
-                  {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label} -{' '}
+      {/* Recurring bookings table */}
+      <div className="bg-surface rounded border border-muted overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Usuario</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Día</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Horario</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Cancha</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Duración</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Estado</th>
+              <th className="px-3 py-3 text-center text-sm font-medium text-neutral">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-muted">
+            {recurringBookings.map((booking) => (
+              <tr key={booking.id} className="hover:bg-muted/20 transition-colors">
+                <td className="px-3 py-3">
+                  <div>
+                    <div className="font-medium text-neutral text-sm">
+                      {booking.user?.full_name || 'Usuario no encontrado'}
+                    </div>
+                    <div className="text-xs text-neutral-muted">{booking.user?.email}</div>
+                  </div>
+                </td>
+                <td className="px-3 py-3">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
+                    {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-neutral text-sm">
                   {booking.start_time} - {booking.end_time}
-                </p>
-                <p className="text-sm text-neutral">
-                  Cancha {booking.court} - {booking.duration_minutes} minutos
-                </p>
-                {booking.start_date && (
-                  <p className="text-sm text-neutral">
-                    Desde: {new Date(booking.start_date).toLocaleDateString('es-ES')}
-                    {booking.end_date &&
-                      ` - Hasta: ${new Date(booking.end_date).toLocaleDateString('es-ES')}`}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => startEditBooking(booking)}
-                  className="bg-accent text-dark px-3 py-1 rounded hover:bg-accent-hover transition-colors"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => updateRecurringBooking(booking.id, 'active', !booking.active)}
-                  className={`px-3 py-1 rounded ${
-                    booking.active
-                      ? 'bg-success text-light hover:bg-success/80'
-                      : 'bg-warning text-light hover:bg-warning/80'
-                  }`}
-                >
-                  {booking.active ? 'Activa' : 'Inactiva'}
-                </button>
-                <button
-                  onClick={() => deleteRecurringBooking(booking.id)}
-                  className="bg-error text-light px-3 py-1 rounded hover:bg-error-light transition-colors"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+                </td>
+                <td className="px-3 py-3">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
+                    {booking.court}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-neutral text-sm">{booking.duration_minutes} min</td>
+                <td className="px-3 py-3">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      booking.active ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'
+                    }`}
+                  >
+                    {booking.active ? 'Activa' : 'Inactiva'}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex justify-center">
+                    <div className="relative group">
+                      <button className="p-1.5 text-neutral hover:text-accent transition-colors">
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                          />
+                        </svg>
+                      </button>
+                      <div className="absolute right-0 mt-2 w-44 bg-surface border border-muted rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div className="py-1">
+                          <button
+                            onClick={() => startEditBooking(booking)}
+                            className="w-full text-left px-3 py-2 text-sm text-neutral hover:bg-accent/10 transition-colors"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateRecurringBooking(booking.id, 'active', !booking.active)
+                            }
+                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                              booking.active
+                                ? 'text-warning hover:bg-warning/10'
+                                : 'text-success hover:bg-success/10'
+                            }`}
+                          >
+                            {booking.active ? '⏸️ Desactivar' : '▶️ Activar'}
+                          </button>
+                          <button
+                            onClick={() => deleteRecurringBooking(booking.id)}
+                            className="w-full text-left px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {recurringBookings.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-neutral">No hay reservas recurrentes configuradas.</p>
+          <div className="text-center py-12">
+            <div className="text-neutral-muted mb-2">
+              <svg
+                className="w-12 h-12 mx-auto mb-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <p className="text-neutral text-lg font-medium">
+              No hay reservas recurrentes configuradas
+            </p>
+            <p className="text-neutral-muted text-sm mt-1">
+              Crea tu primera reserva recurrente usando el botón de arriba
+            </p>
           </div>
         )}
       </div>
@@ -811,10 +879,14 @@ export default function RecurringBookingsPage() {
 
               {/* Day of week */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral">Día de la semana</label>
+                <label className="block text-sm font-medium mb-2 text-neutral">
+                  Día de la semana
+                </label>
                 <select
                   value={editForm.day_of_week}
-                  onChange={(e) => setEditForm({ ...editForm, day_of_week: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, day_of_week: Number(e.target.value) })
+                  }
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                 >
                   {daysOfWeek.map((day) => (
@@ -833,7 +905,9 @@ export default function RecurringBookingsPage() {
                     onClick={() => setShowEditEarlySlots(!showEditEarlySlots)}
                     className="text-sm text-primary hover:underline"
                   >
-                    {showEditEarlySlots ? 'Ocultar horarios tempranos' : 'Mostrar horarios tempranos'}
+                    {showEditEarlySlots
+                      ? 'Ocultar horarios tempranos'
+                      : 'Mostrar horarios tempranos'}
                   </button>
                 </div>
                 <select
@@ -855,7 +929,12 @@ export default function RecurringBookingsPage() {
                 <label className="block text-sm font-medium mb-2 text-neutral">Duración</label>
                 <select
                   value={editForm.duration_minutes}
-                  onChange={(e) => setEditForm({ ...editForm, duration_minutes: Number(e.target.value) as 60 | 90 | 120 })}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      duration_minutes: Number(e.target.value) as 60 | 90 | 120,
+                    })
+                  }
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                 >
                   <option value={60}>60 minutos</option>
@@ -869,7 +948,9 @@ export default function RecurringBookingsPage() {
                 <label className="block text-sm font-medium mb-2 text-neutral">Cancha</label>
                 <select
                   value={editForm.court}
-                  onChange={(e) => setEditForm({ ...editForm, court: Number(e.target.value) as 1 | 2 | 3 })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, court: Number(e.target.value) as 1 | 2 | 3 })
+                  }
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                 >
                   <option value={1}>Cancha 1</option>
@@ -880,7 +961,9 @@ export default function RecurringBookingsPage() {
 
               {/* Start date */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral">Fecha de inicio</label>
+                <label className="block text-sm font-medium mb-2 text-neutral">
+                  Fecha de inicio
+                </label>
                 <input
                   type="date"
                   value={editForm.start_date}
@@ -891,7 +974,9 @@ export default function RecurringBookingsPage() {
 
               {/* End date */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral">Fecha de fin (opcional)</label>
+                <label className="block text-sm font-medium mb-2 text-neutral">
+                  Fecha de fin (opcional)
+                </label>
                 <input
                   type="date"
                   value={editForm.end_date}

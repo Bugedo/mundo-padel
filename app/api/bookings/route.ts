@@ -3,6 +3,29 @@ import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
 import { getDayOfWeekBuenosAires, isBookingExpiredBuenosAires } from '@/lib/timezoneUtils';
 
+interface Booking {
+  id: string;
+  user_id: string;
+  court: number | null;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmed: boolean;
+  present: boolean;
+  cancelled: boolean;
+  absent?: boolean;
+  expires_at?: string;
+  is_recurring?: boolean;
+  recurring_booking_id?: string;
+  comment?: string;
+  user?: {
+    full_name: string;
+    email: string;
+    phone?: string;
+  };
+}
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -45,8 +68,79 @@ export async function GET(req: Request) {
   }
 }
 
+// Helper function to clean up duplicate bookings for the same recurring_booking_id
+async function cleanupDuplicateBookings(date: string) {
+  try {
+    console.log(`Cleaning up duplicate bookings for ${date}`);
+
+    // Get all bookings for this date that have recurring_booking_id
+    const { data: allBookings, error } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('date', date)
+      .not('recurring_booking_id', 'is', null);
+
+    if (error) {
+      console.error('Error fetching bookings for cleanup:', error);
+      return;
+    }
+
+    if (!allBookings || allBookings.length === 0) {
+      return;
+    }
+
+    // Group by recurring_booking_id
+    const grouped = allBookings.reduce(
+      (acc, booking) => {
+        const key = booking.recurring_booking_id;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(booking);
+        return acc;
+      },
+      {} as Record<string, Booking[]>,
+    );
+
+    // For each group, keep only one active booking (or the first cancelled one if all are cancelled)
+    for (const [recurringId, bookings] of Object.entries(grouped)) {
+      const bookingList = bookings as Booking[];
+      if (bookingList.length <= 1) continue; // No duplicates
+
+      console.log(`Found ${bookingList.length} duplicate bookings for recurring ${recurringId}`);
+
+      // Sort: active bookings first, then cancelled ones
+      const sortedBookings = bookingList.sort((a, b) => {
+        if (a.cancelled === b.cancelled) return 0;
+        return a.cancelled ? 1 : -1; // Active first
+      });
+
+      // Keep the first booking, delete the rest
+      const toKeep = sortedBookings[0];
+      const toDelete = sortedBookings.slice(1);
+
+      console.log(`Keeping booking ${toKeep.id}, deleting ${toDelete.length} duplicates`);
+
+      // Delete duplicates
+      const idsToDelete = toDelete.map((b) => b.id);
+      const { error: deleteError } = await supabaseAdmin
+        .from('bookings')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) {
+        console.error('Error deleting duplicate bookings:', deleteError);
+      } else {
+        console.log(`Successfully deleted ${idsToDelete.length} duplicate bookings`);
+      }
+    }
+  } catch (error) {
+    console.error('Error in cleanupDuplicateBookings:', error);
+  }
+}
+
 // Helper function to generate recurring bookings for a specific date
 async function generateRecurringBookingsForDate(date: string) {
+  // First, clean up any duplicate bookings
+  await cleanupDuplicateBookings(date);
   const dateObj = new Date(date);
   const dayOfWeek = getDayOfWeekBuenosAires(dateObj); // 0-6 (Sunday-Saturday)
   const nativeDayOfWeek = dateObj.getDay(); // Native JavaScript day of week
@@ -82,15 +176,32 @@ async function generateRecurringBookingsForDate(date: string) {
     console.log(`Processing recurring booking ${recurring.id} for user ${recurring.user_id}`);
 
     // Check if there's already a booking for this recurring booking on this date
-    const { data: existingBooking } = await supabaseAdmin
+    const { data: existingBookings, error: existingError } = await supabaseAdmin
       .from('bookings')
-      .select('id')
+      .select('id, cancelled')
       .eq('date', date)
-      .eq('recurring_booking_id', recurring.id)
-      .single();
+      .eq('recurring_booking_id', recurring.id);
 
-    if (existingBooking) {
-      console.log(`Booking already exists for recurring ${recurring.id} on ${date}`);
+    console.log(`Checking existing bookings for recurring ${recurring.id} on ${date}:`, {
+      count: existingBookings?.length || 0,
+      bookings: existingBookings,
+      error: existingError,
+    });
+
+    // Check if there's at least one booking for this recurring booking (active or cancelled)
+    const anyBooking = existingBookings && existingBookings.length > 0;
+
+    if (anyBooking) {
+      const activeBooking = existingBookings?.find((booking) => !booking.cancelled);
+      if (activeBooking) {
+        console.log(
+          `Active booking already exists for recurring ${recurring.id} on ${date} - skipping regeneration`,
+        );
+      } else {
+        console.log(
+          `Cancelled booking exists for recurring ${recurring.id} on ${date} - skipping regeneration (manual cancellation)`,
+        );
+      }
       continue;
     }
 

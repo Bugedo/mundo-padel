@@ -34,22 +34,22 @@ interface AdminTurneroProps {
   selectedDate: Date;
   onDateChange: (date: Date) => void;
   onBookingUpdate: (id: string, field: keyof Booking, value: boolean) => Promise<void>;
+  loadingDates: Set<string>;
+  getBookingsForDate: (date: Date) => Booking[];
+  reloadBookingsForDate: (date: Date) => Promise<void>;
+  preloadBookings: (dates: Date[]) => Promise<void>;
 }
 
 // Helper functions for week navigation
-const getWeekDates = (date: Date): Date[] => {
+const getWeekDates = (weekOffset: number = 0): Date[] => {
+  const today = getBuenosAiresDate();
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() + weekOffset * 7);
+
   const weekDates: Date[] = [];
-  const startOfWeek = new Date(date);
-
-  // Get Monday of the week (day 1)
-  const dayOfWeek = date.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday is 0, so -6 to get Monday
-  startOfWeek.setDate(date.getDate() + mondayOffset);
-
-  // Generate 7 days starting from Monday
   for (let i = 0; i < 7; i++) {
-    const day = new Date(startOfWeek);
-    day.setDate(startOfWeek.getDate() + i);
+    const day = new Date(startDate);
+    day.setDate(startDate.getDate() + i);
     weekDates.push(day);
   }
 
@@ -113,11 +113,31 @@ export default function AdminTurnero({
   selectedDate,
   onDateChange,
   onBookingUpdate,
+  loadingDates,
+  getBookingsForDate,
+  reloadBookingsForDate,
+  preloadBookings,
 }: AdminTurneroProps) {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showEarly, setShowEarly] = useState(false);
   const [timeLeft, setTimeLeft] = useState<{ [id: string]: number }>({});
+  // Initialize currentWeekOffset to 0 (current week: today + 6 days ahead)
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+
+  // Obtener reservas de la fecha seleccionada desde el cache
+  const bookings = getBookingsForDate(selectedDate);
+  const loading = loadingDates.has(formatDateForAPI(selectedDate));
+
+  // Precargar reservas de la semana cuando cambie el offset (con delay para evitar sobrecarga)
+  useEffect(() => {
+    const weekDates = getWeekDates(currentWeekOffset);
+    
+    // Precargar con delay para evitar múltiples llamadas rápidas
+    const timer = setTimeout(() => {
+      preloadBookings(weekDates);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [currentWeekOffset, preloadBookings]);
 
   // Booking creation state
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
@@ -138,25 +158,7 @@ export default function AdminTurnero({
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
 
-  const fetchBookings = useCallback(async () => {
-    setLoading(true);
-    const dateString = formatDateForAPI(selectedDate);
-
-    const res = await fetch(`/api/bookings?date=${dateString}`, { cache: 'no-store' });
-    const data = await res.json();
-
-    if (res.ok) {
-      setBookings(data as Booking[]);
-    } else {
-      console.error('Error fetching bookings:', data.error);
-    }
-
-    setLoading(false);
-  }, [selectedDate]);
-
-  useEffect(() => {
-    fetchBookings();
-  }, [selectedDate, fetchBookings]);
+  // Ya no necesitamos fetchBookings - usamos el cache
 
   // Fetch users for booking creation
   const fetchUsers = useCallback(async () => {
@@ -203,9 +205,9 @@ export default function AdminTurnero({
   }, [bookings]);
 
   const changeWeek = (offset: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + offset * 7);
-    onDateChange(newDate);
+    const newOffset = currentWeekOffset + offset;
+    setCurrentWeekOffset(newOffset);
+    // No cambiamos la fecha seleccionada, solo la vista de la semana
   };
 
   const selectDate = (date: Date) => {
@@ -303,12 +305,7 @@ export default function AdminTurnero({
         return;
     }
 
-    // Update local state immediately for better UX
-    setBookings((prevBookings) =>
-      prevBookings.map((b) => (b.id === booking.id ? { ...b, [field]: value } : b)),
-    );
-
-    // Then update the server
+    // Update the server (the cache will be updated by the parent component)
     await onBookingUpdate(booking.id, field, value);
   };
 
@@ -338,10 +335,8 @@ export default function AdminTurnero({
       });
 
       if (response.ok) {
-        // Update local state
-        setBookings((prevBookings) =>
-          prevBookings.map((b) => (b.id === booking.id ? { ...b, comment: commentValue } : b)),
-        );
+        // Recargar las reservas para actualizar el cache
+        await reloadBookingsForDate(selectedDate);
         setEditingComment(null);
         setCommentValue('');
       } else {
@@ -445,10 +440,8 @@ export default function AdminTurnero({
     });
 
     if (response.ok) {
-      const newBooking = await response.json();
-
-      // Add the new booking to local state immediately
-      setBookings((prevBookings) => [...prevBookings, newBooking]);
+      // Recargar las reservas de la fecha actual para actualizar el cache
+      await reloadBookingsForDate(selectedDate);
 
       alert('Reserva creada exitosamente');
       setShowCreateForm(false);
@@ -485,25 +478,37 @@ export default function AdminTurnero({
 
           {/* Week Days Selector */}
           <div className="flex gap-1">
-            {getWeekDates(selectedDate).map((date, index) => (
-              <button
-                key={index}
-                onClick={() => selectDate(date)}
-                className={`
-                  flex flex-col items-center p-2 rounded transition-colors min-w-[50px]
-                  ${
-                    isSameDate(date, selectedDate)
-                      ? 'bg-accent text-dark font-semibold'
-                      : isToday(date)
-                        ? 'bg-accent/20 text-accent border-2 border-accent'
-                        : 'bg-surface text-neutral hover:bg-accent/10'
-                  }
-                `}
-              >
-                <span className="text-xs font-medium">{formatDayName(date)}</span>
-                <span className="text-sm">{formatDayNumber(date)}</span>
-              </button>
-            ))}
+            {getWeekDates(currentWeekOffset).map((date, index) => {
+              const dateString = formatDateForAPI(date);
+              const isLoading = loadingDates.has(dateString);
+              
+              return (
+                <button
+                  key={index}
+                  onClick={() => selectDate(date)}
+                  disabled={isLoading}
+                  className={`
+                    flex flex-col items-center p-2 rounded transition-colors min-w-[50px] relative
+                    ${
+                      isSameDate(date, selectedDate)
+                        ? 'bg-accent text-dark font-semibold'
+                        : isToday(date)
+                          ? 'bg-accent/20 text-accent border-2 border-accent'
+                          : 'bg-surface text-neutral hover:bg-accent/10'
+                    }
+                    ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}
+                  `}
+                >
+                  {isLoading && (
+                    <div className="absolute top-1 right-1 w-2 h-2">
+                      <div className="animate-spin rounded-full h-2 w-2 border-b border-blue-600"></div>
+                    </div>
+                  )}
+                  <span className="text-xs font-medium">{formatDayName(date)}</span>
+                  <span className="text-sm">{formatDayNumber(date)}</span>
+                </button>
+              );
+            })}
           </div>
 
           <button
