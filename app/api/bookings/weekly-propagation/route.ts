@@ -1,6 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBuenosAiresDate } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
+
+interface BookingToCreate {
+  user_id: string;
+  court: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmed: boolean;
+  present: boolean;
+  cancelled: boolean;
+  is_recurring: boolean;
+  recurring_booking_id: string;
+  created_by: string;
+}
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,6 +37,7 @@ export async function POST() {
     }
 
     console.log('🚀 Starting weekly recurring bookings propagation...');
+    console.log('🎯 Goal: Ensure 15 days of recurring bookings are always available');
 
     // Obtener todas las reservas recurrentes activas
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
@@ -46,87 +62,135 @@ export async function POST() {
     let totalPropagated = 0;
     const errors: string[] = [];
 
-    // Procesar cada reserva recurrente
-    for (const recurring of recurringBookings) {
-      try {
-        console.log(`Processing recurring booking ${recurring.id} for user ${recurring.user_id}`);
+    // Calculate date range: ALWAYS ensure next 15 days from today
+    const startDate = new Date(now);
+    const endDate = new Date(now);
+    endDate.setDate(endDate.getDate() + 15);
+    const startDateString = formatDateForAPI(startDate);
+    const endDateString = formatDateForAPI(endDate);
 
-        // Calcular las fechas para las próximas 2 semanas (14 días)
-        const startDate = new Date(now);
-        startDate.setDate(now.getDate() + 7); // Empezar desde la próxima semana
+    console.log(`📅 Ensuring population range: ${startDateString} to ${endDateString}`);
+    console.log('🔍 Strategy: Check each day and fill any gaps found');
 
-        for (let week = 0; week < 2; week++) {
-          const targetDate = new Date(startDate);
-          targetDate.setDate(startDate.getDate() + week * 7 + recurring.day_of_week);
+    // Get ALL existing recurring bookings for the entire range to optimize queries
+    console.log('\n🔍 Fetching all existing recurring bookings for the date range...');
+    const { data: allExistingBookings, error: allExistingError } = await supabaseAdmin
+      .from('bookings')
+      .select('date, recurring_booking_id')
+      .eq('is_recurring', true)
+      .gte('date', startDateString)
+      .lte('date', endDateString);
 
-          const dateString = targetDate.toISOString().split('T')[0];
-
-          // Verificar si ya existe una reserva para esta fecha y recurring_booking_id
-          const { data: existingBookings, error: existingError } = await supabaseAdmin
-            .from('bookings')
-            .select('id, cancelled')
-            .eq('date', dateString)
-            .eq('recurring_booking_id', recurring.id);
-
-          if (existingError) {
-            console.error(`Error checking existing bookings for ${dateString}:`, existingError);
-            errors.push(
-              `Error checking existing bookings for ${dateString}: ${existingError.message}`,
-            );
-            continue;
-          }
-
-          // Si ya existe una reserva (activa o cancelada), no crear duplicado
-          if (existingBookings && existingBookings.length > 0) {
-            const existingBooking = existingBookings[0];
-            console.log(
-              `Booking already exists for ${dateString} (${existingBooking.cancelled ? 'cancelled' : 'active'}) - skipping`,
-            );
-            continue;
-          }
-
-          // Verificar que la fecha esté dentro del rango de la reserva recurrente
-          const recurringStartDate = new Date(recurring.start_date);
-          const recurringEndDate = recurring.end_date ? new Date(recurring.end_date) : null;
-
-          if (
-            targetDate < recurringStartDate ||
-            (recurringEndDate && targetDate > recurringEndDate)
-          ) {
-            console.log(`Date ${dateString} is outside recurring booking date range - skipping`);
-            continue;
-          }
-
-          // Crear la nueva reserva
-          const { error: insertError } = await supabaseAdmin.from('bookings').insert({
-            user_id: recurring.user_id,
-            court: recurring.court,
-            date: dateString,
-            start_time: recurring.start_time,
-            end_time: recurring.end_time,
-            duration_minutes: recurring.duration_minutes,
-            confirmed: true,
-            present: false,
-            cancelled: false,
-            recurring_booking_id: recurring.id,
-            created_by: recurring.user_id,
-          });
-
-          if (insertError) {
-            console.error(`Error creating booking for ${dateString}:`, insertError);
-            errors.push(`Error creating booking for ${dateString}: ${insertError.message}`);
-          } else {
-            totalPropagated++;
-            console.log(`✅ Created booking for ${dateString} at ${recurring.start_time}`);
-          }
-        }
-      } catch (error) {
-        console.error(`Error processing recurring booking ${recurring.id}:`, error);
-        errors.push(`Error processing recurring booking ${recurring.id}: ${error}`);
-      }
+    if (allExistingError) {
+      console.error('❌ Error fetching existing bookings:', allExistingError);
+      return NextResponse.json({ error: 'Failed to fetch existing bookings' }, { status: 500 });
     }
 
-    console.log(`🎉 Weekly propagation completed! Created ${totalPropagated} new bookings`);
+    // Create a map for quick lookup: date -> Set of recurring_booking_ids
+    const existingBookingsMap = new Map<string, Set<string>>();
+    allExistingBookings?.forEach((booking) => {
+      if (!existingBookingsMap.has(booking.date)) {
+        existingBookingsMap.set(booking.date, new Set());
+      }
+      if (booking.recurring_booking_id) {
+        existingBookingsMap.get(booking.date)!.add(booking.recurring_booking_id);
+      }
+    });
+
+    console.log(`📊 Found existing bookings for ${existingBookingsMap.size} dates in the range`);
+
+    // Process each day in the range
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateString = formatDateForAPI(currentDate);
+      const existingForDate = existingBookingsMap.get(dateString) || new Set();
+
+      console.log(`\n📅 Processing date: ${dateString}`);
+      console.log(`📊 Found ${existingForDate.size} existing recurring bookings for ${dateString}`);
+
+      let dayBookingsCreated = 0;
+      const bookingsToCreate: BookingToCreate[] = [];
+
+      // Process each recurring booking
+      for (const recurring of recurringBookings) {
+        // Skip if booking already exists for this date
+        if (existingForDate.has(recurring.id)) {
+          console.log(`⏭️ Skipping ${recurring.id} - already exists for ${dateString}`);
+          continue;
+        }
+
+        // Check if this date should have a recurring booking using the database function
+        const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
+          'should_have_recurring_booking',
+          {
+            p_recurring_id: recurring.id,
+            p_check_date: dateString,
+          },
+        );
+
+        if (checkError) {
+          console.error(`❌ Error checking recurring booking ${recurring.id}:`, checkError);
+          errors.push(`Error checking recurring booking ${recurring.id}: ${checkError.message}`);
+          continue;
+        }
+
+        if (!shouldBeActive) {
+          console.log(`⏭️ Skipping ${recurring.id} - not applicable for ${dateString}`);
+          continue;
+        }
+
+        // Prepare booking for batch insert
+        bookingsToCreate.push({
+          user_id: recurring.user_id,
+          court: recurring.court,
+          date: dateString,
+          start_time: recurring.start_time,
+          end_time: recurring.end_time,
+          duration_minutes: recurring.duration_minutes,
+          confirmed: true,
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          recurring_booking_id: recurring.id,
+          created_by: recurring.user_id,
+        });
+
+        console.log(`➕ Queued booking for ${recurring.id} on ${dateString}`);
+      }
+
+      // Batch insert all bookings for this date
+      if (bookingsToCreate.length > 0) {
+        const { error: insertError } = await supabaseAdmin
+          .from('bookings')
+          .insert(bookingsToCreate);
+
+        if (insertError) {
+          console.error(`❌ Error creating bookings for ${dateString}:`, insertError);
+          errors.push(`Error creating bookings for ${dateString}: ${insertError.message}`);
+        } else {
+          dayBookingsCreated = bookingsToCreate.length;
+          totalPropagated += dayBookingsCreated;
+          console.log(`✅ Created ${dayBookingsCreated} bookings for ${dateString}`);
+        }
+      } else {
+        console.log(`✅ No bookings needed for ${dateString} - all covered`);
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    console.log(`\n🎉 Weekly propagation completed!`);
+    console.log(`📊 Summary:`);
+    console.log(`   - Date range: ${startDateString} to ${endDateString} (15 days)`);
+    console.log(`   - Bookings created: ${totalPropagated}`);
+    console.log(`   - Recurring bookings processed: ${recurringBookings.length}`);
+    console.log(`   - Errors encountered: ${errors.length}`);
+
+    if (totalPropagated > 0) {
+      console.log(`✅ Successfully ensured 15 days of recurring bookings are available!`);
+    } else {
+      console.log(`ℹ️ All 15 days were already properly populated - no gaps found!`);
+    }
 
     return NextResponse.json({
       success: true,
@@ -136,6 +200,10 @@ export async function POST() {
       errors: errors,
       executedAt: now.toISOString(),
       timezone: 'Buenos Aires (UTC-3)',
+      dateRange: {
+        start: formatDateForAPI(now),
+        end: endDateString,
+      },
     });
   } catch (error) {
     console.error('Error in weekly propagation:', error);

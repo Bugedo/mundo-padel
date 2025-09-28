@@ -7,9 +7,8 @@ import {
   getBuenosAiresDate,
   formatDateForAPI,
   getAvailableDatesBuenosAires,
-  getDayOfWeekBuenosAires,
   isTodayBuenosAires,
-  isBookingExpiredBuenosAires
+  isBookingExpiredBuenosAires,
 } from '@/lib/timezoneUtils';
 
 interface Booking {
@@ -38,6 +37,19 @@ interface PendingBooking {
   duration_minutes: number;
   confirmed: boolean;
   expires_at: string;
+}
+
+interface RecurringBooking {
+  id: string;
+  user_id: string;
+  court: number;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  first_date: string;
+  last_date: string | null;
+  recurrence_interval_days: number;
+  active: boolean;
 }
 
 const allSlots = [
@@ -131,17 +143,36 @@ export default function Turnero() {
   // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
     const dateString = formatDateForAPI(selectedDate);
-    const dayOfWeek = getDayOfWeekBuenosAires(selectedDate); // 0-6 (Sunday-Saturday)
 
-    const { data, error } = await supabase
+    // Use the database function to check which recurring bookings should be active on this date
+    const { data: recurringBookings, error } = await supabase
       .from('recurring_bookings')
       .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .eq('active', true);
+      .eq('active', true)
+      .lte('first_date', dateString)
+      .or(`last_date.is.null,last_date.gte.${dateString}`);
 
-    if (!error && data) {
+    if (!error && recurringBookings) {
+      // Filter recurring bookings that should be active on this specific date
+      const applicableRecurringBookings: RecurringBooking[] = [];
+
+      for (const recurring of recurringBookings) {
+        // Check if this date should have a recurring booking
+        const { data: shouldBeActive, error: checkError } = await supabase.rpc(
+          'should_have_recurring_booking',
+          {
+            p_recurring_id: recurring.id,
+            p_check_date: dateString,
+          },
+        );
+
+        if (!checkError && shouldBeActive) {
+          applicableRecurringBookings.push(recurring);
+        }
+      }
+
       // Convert recurring bookings to regular bookings for the selected date
-      const recurringBookingsForDate = data.map((recurring) => ({
+      const recurringBookingsForDate = applicableRecurringBookings.map((recurring) => ({
         id: `recurring-${recurring.id}`,
         user_id: recurring.user_id,
         court: recurring.court,
@@ -183,7 +214,8 @@ export default function Turnero() {
       const bStart = bh * 60 + bm;
       const bEnd = bStart + (b.duration_minutes || 90);
       const active =
-        (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
+        (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
+        !b.cancelled;
       return active && checkMinutes >= bStart && checkMinutes < bEnd;
     });
 
@@ -207,7 +239,8 @@ export default function Turnero() {
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
         const active =
-          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) && !b.cancelled;
+          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
+          !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       });
 

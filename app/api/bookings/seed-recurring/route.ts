@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
-import { getBuenosAiresDate, getDayOfWeekBuenosAires } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, getDayOfWeekBuenosAires, formatDateForAPI } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         for (let day = 0; day < 7; day++) {
           const checkDate = new Date(today);
           checkDate.setDate(today.getDate() + week * 7 + day);
-          const checkDateString = checkDate.toISOString().split('T')[0];
+          const checkDateString = formatDateForAPI(checkDate);
           const checkDayOfWeek = getDayOfWeekBuenosAires(checkDate);
 
           // Only create bookings for the correct day of week

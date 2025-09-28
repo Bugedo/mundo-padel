@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatTimeForDisplay } from '@/lib/timeFormatUtils';
 
 interface RecurringBooking {
   id: string;
   user_id: string;
   court: number;
-  day_of_week: number;
   start_time: string;
   end_time: string;
   duration_minutes: number;
   active: boolean;
-  start_date?: string;
-  end_date?: string;
+  first_date: string;
+  last_date?: string;
+  recurrence_interval_days: number;
   created_at: string;
   user?: {
     full_name: string;
@@ -86,8 +87,9 @@ export default function RecurringBookingsPage() {
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedDuration, setSelectedDuration] = useState<60 | 90 | 120>(90);
   const [selectedCourt, setSelectedCourt] = useState<1 | 2 | 3>(1);
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [firstDate, setFirstDate] = useState<string>('');
+  const [lastDate, setLastDate] = useState<string>('');
+  const [recurrenceInterval, setRecurrenceInterval] = useState<number>(7);
   const [showEarlySlots, setShowEarlySlots] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -98,12 +100,12 @@ export default function RecurringBookingsPage() {
   const [editForm, setEditForm] = useState({
     user_id: '',
     court: 1 as 1 | 2 | 3,
-    day_of_week: 0,
     start_time: '',
     end_time: '',
     duration_minutes: 90 as 60 | 90 | 120,
-    start_date: '',
-    end_date: '',
+    first_date: '',
+    last_date: '',
+    recurrence_interval_days: 7,
     active: true,
   });
   const [editUserSearchTerm, setEditUserSearchTerm] = useState('');
@@ -236,13 +238,10 @@ export default function RecurringBookingsPage() {
   };
 
   const createRecurringBooking = async () => {
-    if (!selectedUser || !selectedTime || !startDate) {
+    if (!selectedUser || !selectedTime || !firstDate) {
       alert('Por favor selecciona un usuario, horario y fecha de inicio');
       return;
     }
-
-    // Calculate day of week from selected date
-    const selectedDayOfWeek = new Date(startDate).getDay();
 
     const [h, m] = selectedTime.split(':').map(Number);
     const startMinutes = h * 60 + m;
@@ -252,59 +251,6 @@ export default function RecurringBookingsPage() {
 
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
 
-    // Check for conflicts with existing recurring bookings
-    const conflictingRecurring = recurringBookings.filter(
-      (booking) =>
-        booking.day_of_week === selectedDayOfWeek &&
-        booking.court === selectedCourt &&
-        booking.active &&
-        ((booking.start_time <= selectedTime && booking.end_time > selectedTime) ||
-          (booking.start_time < end_time && booking.end_time >= end_time) ||
-          (selectedTime <= booking.start_time && end_time >= booking.end_time)),
-    );
-
-    if (conflictingRecurring.length > 0) {
-      alert(
-        'Ya existe una reserva para este día, horario y cancha. Por favor selecciona otro horario o cancha.',
-      );
-      return;
-    }
-
-    // Check for conflicts with regular bookings on the start date
-    try {
-      const res = await fetch(`/api/bookings?date=${startDate}`, { cache: 'no-store' });
-      const regularBookings = await res.json();
-
-      if (res.ok) {
-        const conflictingRegular = regularBookings.filter(
-          (booking: {
-            court: number;
-            cancelled: boolean;
-            confirmed: boolean;
-            expires_at?: string;
-            start_time: string;
-            end_time: string;
-          }) =>
-            booking.court === selectedCourt &&
-            !booking.cancelled &&
-            (booking.confirmed ||
-              (booking.expires_at && new Date(booking.expires_at) > new Date())) &&
-            ((booking.start_time <= selectedTime && booking.end_time > selectedTime) ||
-              (booking.start_time < end_time && booking.end_time >= end_time) ||
-              (selectedTime <= booking.start_time && end_time >= booking.end_time)),
-        );
-
-        if (conflictingRegular.length > 0) {
-          alert(
-            'Ya existe una reserva regular para este día, horario y cancha. Por favor selecciona otro horario o cancha.',
-          );
-          return;
-        }
-      }
-    } catch (error: unknown) {
-      console.error('Error checking regular bookings:', error);
-    }
-
     try {
       const res = await fetch('/api/recurring-bookings', {
         method: 'POST',
@@ -312,12 +258,12 @@ export default function RecurringBookingsPage() {
         body: JSON.stringify({
           user_id: selectedUser,
           court: selectedCourt,
-          day_of_week: selectedDayOfWeek,
           start_time: selectedTime,
           end_time,
           duration_minutes: selectedDuration,
-          start_date: startDate,
-          end_date: endDate || null, // null means forever
+          first_date: firstDate,
+          last_date: lastDate || null, // null means forever
+          recurrence_interval_days: recurrenceInterval,
         }),
       });
 
@@ -329,8 +275,9 @@ export default function RecurringBookingsPage() {
         setSelectedTime('');
         setSelectedCourt(1);
         setSelectedDuration(90);
-        setStartDate('');
-        setEndDate('');
+        setFirstDate('');
+        setLastDate('');
+        setRecurrenceInterval(7);
       } else {
         const data = await res.json();
         alert(`Error al crear reserva recurrente: ${data.error}`);
@@ -393,12 +340,12 @@ export default function RecurringBookingsPage() {
     setEditForm({
       user_id: booking.user_id,
       court: booking.court as 1 | 2 | 3,
-      day_of_week: booking.day_of_week,
       start_time: booking.start_time,
       end_time: booking.end_time,
       duration_minutes: booking.duration_minutes as 60 | 90 | 120,
-      start_date: booking.start_date || '',
-      end_date: booking.end_date || '',
+      first_date: booking.first_date || '',
+      last_date: booking.last_date || '',
+      recurrence_interval_days: booking.recurrence_interval_days,
       active: booking.active,
     });
 
@@ -410,6 +357,21 @@ export default function RecurringBookingsPage() {
     }
 
     setShowEditEarlySlots(booking.start_time < '16:30');
+
+    // Debug logging
+    console.log('Edit form populated:', {
+      bookingId: booking.id.substring(0, 8),
+      user: booking.user?.full_name || booking.user?.email,
+      court: booking.court,
+      startTime: booking.start_time,
+      duration: booking.duration_minutes,
+      firstDate: booking.first_date,
+      lastDate: booking.last_date,
+      interval: booking.recurrence_interval_days,
+      active: booking.active,
+      showEarlySlots: booking.start_time < '16:30',
+    });
+    setShowEditUserDropdown(false); // Hide dropdown since user is already selected
   };
 
   const cancelEdit = () => {
@@ -417,12 +379,12 @@ export default function RecurringBookingsPage() {
     setEditForm({
       user_id: '',
       court: 1,
-      day_of_week: 0,
       start_time: '',
       end_time: '',
       duration_minutes: 90,
-      start_date: '',
-      end_date: '',
+      first_date: '',
+      last_date: '',
+      recurrence_interval_days: 7,
       active: true,
     });
     setEditUserSearchTerm('');
@@ -451,12 +413,12 @@ export default function RecurringBookingsPage() {
           updates: {
             user_id: editForm.user_id,
             court: editForm.court,
-            day_of_week: editForm.day_of_week,
             start_time: editForm.start_time,
             end_time: calculatedEndTime,
             duration_minutes: editForm.duration_minutes,
-            start_date: editForm.start_date || null,
-            end_date: editForm.end_date || null,
+            first_date: editForm.first_date || null,
+            last_date: editForm.last_date || null,
+            recurrence_interval_days: editForm.recurrence_interval_days,
             active: editForm.active,
           },
         }),
@@ -584,13 +546,13 @@ export default function RecurringBookingsPage() {
               <label className="block text-sm font-medium mb-2 text-neutral">Fecha de inicio</label>
               <input
                 type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                value={firstDate}
+                onChange={(e) => setFirstDate(e.target.value)}
                 className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
-              {startDate && (
+              {firstDate && (
                 <p className="text-sm text-neutral mt-1">
-                  Día de la semana: {daysOfWeek[new Date(startDate).getDay()]?.label}
+                  Día de la semana: {daysOfWeek[new Date(firstDate).getDay()]?.label}
                 </p>
               )}
             </div>
@@ -613,8 +575,8 @@ export default function RecurringBookingsPage() {
               >
                 <option value="">Seleccionar horario</option>
                 {slots.map((slot) => (
-                  <option key={slot.start} value={slot.start}>
-                    {slot.start} - {slot.end}
+                  <option key={slot.start} value={slot.start + ':00'}>
+                    {formatTimeForDisplay(slot.start + ':00')}
                   </option>
                 ))}
               </select>
@@ -654,8 +616,8 @@ export default function RecurringBookingsPage() {
               </label>
               <input
                 type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                value={lastDate}
+                onChange={(e) => setLastDate(e.target.value)}
                 className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
               />
               <p className="text-xs text-neutral-muted mt-1">
@@ -667,7 +629,7 @@ export default function RecurringBookingsPage() {
             <div className="md:col-span-2 flex items-end">
               <button
                 onClick={createRecurringBooking}
-                disabled={!selectedUser || !selectedTime || !startDate}
+                disabled={!selectedUser || !selectedTime || !firstDate}
                 className="bg-success text-light px-4 py-2 rounded hover:bg-success-light disabled:bg-muted disabled:text-neutral-muted transition-colors"
               >
                 Crear Reserva Recurrente
@@ -703,12 +665,17 @@ export default function RecurringBookingsPage() {
                   </div>
                 </td>
                 <td className="px-3 py-3">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
-                    {daysOfWeek.find((d) => d.value === booking.day_of_week)?.label}
-                  </span>
+                  <div className="space-y-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
+                      {daysOfWeek[new Date(booking.first_date).getDay()]?.label}
+                    </span>
+                    <div className="text-xs text-neutral-muted">
+                      {booking.first_date} (cada {booking.recurrence_interval_days} días)
+                    </div>
+                  </div>
                 </td>
                 <td className="px-3 py-3 text-neutral text-sm">
-                  {booking.start_time} - {booking.end_time}
+                  {formatTimeForDisplay(booking.start_time)}
                 </td>
                 <td className="px-3 py-3">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
@@ -877,24 +844,22 @@ export default function RecurringBookingsPage() {
                 )}
               </div>
 
-              {/* Day of week */}
+              {/* First date */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">
-                  Día de la semana
+                  Fecha de inicio
                 </label>
-                <select
-                  value={editForm.day_of_week}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, day_of_week: Number(e.target.value) })
-                  }
+                <input
+                  type="date"
+                  value={editForm.first_date}
+                  onChange={(e) => setEditForm({ ...editForm, first_date: e.target.value })}
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
-                >
-                  {daysOfWeek.map((day) => (
-                    <option key={day.value} value={day.value}>
-                      {day.label}
-                    </option>
-                  ))}
-                </select>
+                />
+                {editForm.first_date && (
+                  <p className="text-sm text-neutral mt-1">
+                    Día de la semana: {daysOfWeek[new Date(editForm.first_date).getDay()]?.label}
+                  </p>
+                )}
               </div>
 
               {/* Time selection */}
@@ -917,8 +882,8 @@ export default function RecurringBookingsPage() {
                 >
                   <option value="">Seleccionar horario</option>
                   {(showEditEarlySlots ? allSlots : defaultSlots).map((slot) => (
-                    <option key={slot.start} value={slot.start}>
-                      {slot.start} - {slot.end}
+                    <option key={slot.start} value={slot.start + ':00'}>
+                      {formatTimeForDisplay(slot.start + ':00')}
                     </option>
                   ))}
                 </select>
@@ -959,28 +924,15 @@ export default function RecurringBookingsPage() {
                 </select>
               </div>
 
-              {/* Start date */}
-              <div>
-                <label className="block text-sm font-medium mb-2 text-neutral">
-                  Fecha de inicio
-                </label>
-                <input
-                  type="date"
-                  value={editForm.start_date}
-                  onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
-                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
-                />
-              </div>
-
-              {/* End date */}
+              {/* Last date */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">
                   Fecha de fin (opcional)
                 </label>
                 <input
                   type="date"
-                  value={editForm.end_date}
-                  onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
+                  value={editForm.last_date}
+                  onChange={(e) => setEditForm({ ...editForm, last_date: e.target.value })}
                   className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
                 />
                 <p className="text-xs text-neutral-muted mt-1">

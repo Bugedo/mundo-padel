@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
-import { getBuenosAiresDate, getDayOfWeekBuenosAires } from '@/lib/timezoneUtils';
+// import { getBuenosAiresDate, getDayOfWeekBuenosAires, formatDateForAPI } from '@/lib/timezoneUtils'; // Not used
 
-// Helper function to get day name
-function getDayName(dayNumber: number): string {
-  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-  return days[dayNumber] || '';
-}
+// Helper function to get day name (currently not used)
+// function getDayName(dayNumber: number): string {
+//   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+//   return days[dayNumber] || '';
+// }
 
 // Create admin client with service role key for database operations
 const supabaseAdmin = createClient(
@@ -59,31 +59,34 @@ export async function POST(req: Request) {
     const {
       user_id,
       court,
-      day_of_week,
       start_time,
       end_time,
       duration_minutes,
-      start_date,
-      end_date,
+      first_date,
+      last_date,
+      recurrence_interval_days = 7,
     } = body;
     if (
       !user_id ||
       court === undefined ||
-      day_of_week === undefined ||
       !start_time ||
       !end_time ||
-      !duration_minutes
+      !duration_minutes ||
+      !first_date
     ) {
       return NextResponse.json(
         {
           error:
-            'Missing required fields: user_id, court, day_of_week, start_time, end_time, duration_minutes',
+            'Missing required fields: user_id, court, start_time, end_time, duration_minutes, first_date',
         },
         { status: 400 },
       );
     }
-    if (day_of_week < 0 || day_of_week > 6) {
-      return NextResponse.json({ error: 'day_of_week must be between 0 and 6' }, { status: 400 });
+    if (recurrence_interval_days < 1) {
+      return NextResponse.json(
+        { error: 'recurrence_interval_days must be at least 1' },
+        { status: 400 },
+      );
     }
     if (court < 1 || court > 3) {
       return NextResponse.json({ error: 'court must be between 1 and 3' }, { status: 400 });
@@ -99,38 +102,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check for conflicts with existing recurring bookings
+    // Check for conflicts with existing recurring bookings for the same time slot and court
     const { data: existingRecurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
-      .eq('day_of_week', day_of_week)
       .eq('court', court)
+      .eq('start_time', start_time)
+      .eq('end_time', end_time)
       .eq('active', true);
 
     if (recurringError) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });
     }
 
-    // Check for time conflicts with existing recurring bookings
-    const [startH, startM] = start_time.split(':').map(Number);
-    const [endH, endM] = end_time.split(':').map(Number);
-    const newStartMinutes = startH * 60 + startM;
-    const newEndMinutes = endH * 60 + endM;
-
+    // Check for date conflicts with existing recurring bookings
     for (const existing of existingRecurringBookings || []) {
-      const [existingStartH, existingStartM] = existing.start_time.split(':').map(Number);
-      const [existingEndH, existingEndM] = existing.end_time.split(':').map(Number);
-      const existingStartMinutes = existingStartH * 60 + existingStartM;
-      const existingEndMinutes = existingEndH * 60 + existingEndM;
+      // Check if the new recurring booking would conflict with existing one
+      // We need to check if their date ranges overlap
+      const newFirstDate = new Date(first_date);
+      const newLastDate = last_date ? new Date(last_date) : null;
+      const existingFirstDate = new Date(existing.first_date);
+      const existingLastDate = existing.last_date ? new Date(existing.last_date) : null;
 
-      // Check for overlap
-      if (
-        (newStartMinutes < existingEndMinutes && newEndMinutes > existingStartMinutes) ||
-        (existingStartMinutes < newEndMinutes && existingEndMinutes > newStartMinutes)
-      ) {
+      // Simple overlap check: if either booking's range overlaps with the other
+      const hasOverlap =
+        (newLastDate === null || newLastDate >= existingFirstDate) &&
+        (existingLastDate === null || existingLastDate >= newFirstDate);
+
+      if (hasOverlap) {
         return NextResponse.json(
           {
-            error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${getDayName(day_of_week)})`,
+            error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${existing.first_date}${existing.last_date ? ` to ${existing.last_date}` : ' onwards'})`,
           },
           { status: 409 },
         );
@@ -138,58 +140,38 @@ export async function POST(req: Request) {
     }
 
     // Check for conflicts with regular bookings in the next 6 weeks
-    const today = getBuenosAiresDate();
-    const conflicts: Array<{ date: string; time: string; user: string }> = [];
+    // We'll use the database function to check if any dates in the range have conflicts
+    // const { data: conflictCheck, error: conflictError } = await supabaseAdmin.rpc(
+    //   'should_have_recurring_booking',
+    //   {
+    //     p_recurring_id: null, // We'll check manually since this is a new booking
+    //     p_check_date: first_date,
+    //   },
+    // );
 
-    for (let i = 0; i <= 42; i++) {
-      // Check next 6 weeks
-      const checkDate = new Date(today);
-      checkDate.setDate(today.getDate() + i);
-      const checkDateString = checkDate.toISOString().split('T')[0];
-      const checkDayOfWeek = getDayOfWeekBuenosAires(checkDate);
+    // if (conflictError) {
+    //   console.warn('Could not check conflicts with database function:', conflictError);
+    //   // Continue without the database function check
+    // }
 
-      if (checkDayOfWeek === day_of_week) {
-        // Check if there are regular bookings on this date that conflict
-        const { data: regularBookings, error: regularError } = await supabaseAdmin
-          .from('bookings')
-          .select('*')
-          .eq('date', checkDateString)
-          .eq('court', court)
-          .neq('cancelled', true);
+    // Simple check: verify that the first_date doesn't have a conflicting booking
+    const { data: firstDateBookings, error: firstDateError } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('date', first_date)
+      .eq('court', court)
+      .eq('start_time', start_time)
+      .eq('end_time', end_time)
+      .neq('cancelled', true);
 
-        if (regularError) {
-          return NextResponse.json({ error: regularError.message }, { status: 500 });
-        }
-
-        for (const booking of regularBookings || []) {
-          const [bookingStartH, bookingStartM] = booking.start_time.split(':').map(Number);
-          const [bookingEndH, bookingEndM] = booking.end_time.split(':').map(Number);
-          const bookingStartMinutes = bookingStartH * 60 + bookingStartM;
-          const bookingEndMinutes = bookingEndH * 60 + bookingEndM;
-
-          // Check for overlap
-          if (
-            (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
-            (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
-          ) {
-            conflicts.push({
-              date: checkDateString,
-              time: `${booking.start_time} - ${booking.end_time}`,
-              user: booking.user_id,
-            });
-          }
-        }
-      }
+    if (firstDateError) {
+      return NextResponse.json({ error: firstDateError.message }, { status: 500 });
     }
 
-    if (conflicts.length > 0) {
-      const conflictDetails = conflicts
-        .slice(0, 3)
-        .map((c) => `${c.date} (${c.time})`)
-        .join(', ');
+    if (firstDateBookings && firstDateBookings.length > 0) {
       return NextResponse.json(
         {
-          error: `Recurring booking conflicts with existing bookings: ${conflictDetails}${conflicts.length > 3 ? ' and more...' : ''}`,
+          error: `Date ${first_date} already has a booking for this time slot and court`,
         },
         { status: 409 },
       );
@@ -201,12 +183,12 @@ export async function POST(req: Request) {
       .insert({
         user_id,
         court,
-        day_of_week,
         start_time,
         end_time,
         duration_minutes,
-        start_date: start_date || null,
-        end_date: end_date || null,
+        first_date,
+        last_date: last_date || null,
+        recurrence_interval_days,
         active: true,
       })
       .select()
@@ -216,33 +198,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    // Create the first instance of the recurring booking if start_date is provided
-    if (start_date) {
-      try {
-        const { error: bookingError } = await supabaseAdmin
-          .from('bookings')
-          .insert({
-            user_id,
-            court,
-            date: start_date,
-            start_time,
-            end_time,
-            duration_minutes,
-            confirmed: true, // Recurring bookings are always confirmed
-            present: false,
-            cancelled: false,
-            recurring_booking_id: data.id,
-          });
+    // Create the first instance of the recurring booking
+    try {
+      const { error: bookingError } = await supabaseAdmin.from('bookings').insert({
+        user_id,
+        court,
+        date: first_date,
+        start_time,
+        end_time,
+        duration_minutes,
+        confirmed: true, // Recurring bookings are always confirmed
+        present: false,
+        cancelled: false,
+        recurring_booking_id: data.id,
+      });
 
-        if (bookingError) {
-          console.error('Error creating first recurring booking instance:', bookingError);
-          // Don't fail the entire operation, just log the error
-        } else {
-          console.log(`Created first recurring booking instance for ${start_date} at ${start_time}`);
-        }
-      } catch (error) {
-        console.error('Error in creating first recurring booking instance:', error);
+      if (bookingError) {
+        console.error('Error creating first recurring booking instance:', bookingError);
+        // Don't fail the entire operation, just log the error
+      } else {
+        console.log(`Created first recurring booking instance for ${first_date} at ${start_time}`);
       }
+    } catch (error) {
+      console.error('Error in creating first recurring booking instance:', error);
     }
 
     return NextResponse.json(data);

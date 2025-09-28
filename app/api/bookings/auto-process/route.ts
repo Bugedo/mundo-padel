@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBuenosAiresDate } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 // Helper function to process completed bookings (mark as present)
 async function processCompletedBookings() {
   const now = getBuenosAiresDate();
-  const today = now.toISOString().split('T')[0];
+  const today = formatDateForAPI(now);
 
   // Get all bookings that should have been completed today
   // (bookings that ended before current time and are not cancelled or already marked as present)

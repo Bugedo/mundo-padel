@@ -51,10 +51,9 @@ export function getTodayBuenosAires(): string {
  * 0 = Sunday, 1 = Monday, ..., 6 = Saturday
  */
 export function getDayOfWeekBuenosAires(date: Date): number {
-  // For day of week calculation, we should use the local date without timezone conversion
-  // because we want the day of the week as it appears in Buenos Aires, not the UTC day
-  const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  return localDate.getDay();
+  // Convert the date to Buenos Aires timezone first, then get the day of week
+  const buenosAiresDate = toBuenosAiresDate(date);
+  return buenosAiresDate.getDay();
 }
 
 /**
