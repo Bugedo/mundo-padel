@@ -75,8 +75,8 @@ async function propagateRecurringBooking(
     const bookingsToCreate: BookingToCreate[] = [];
 
     // Generate bookings for each applicable date
+    // Include the first_date in the check as well
     const currentDate = new Date(startDateObj);
-    currentDate.setDate(currentDate.getDate() + 1); // Start from the day after first_date
 
     while (currentDate <= endDateObj) {
       const dateString = currentDate.toISOString().split('T')[0];
@@ -383,8 +383,10 @@ export async function POST(req: Request) {
     }
 
     // Create the first instance of the recurring booking
+    console.log(`Creating first recurring booking instance for ${first_date} at ${start_time}`);
+    
     try {
-      const { error: bookingError } = await supabaseAdmin.from('bookings').insert({
+      const { data: bookingData, error: bookingError } = await supabaseAdmin.from('bookings').insert({
         user_id,
         court,
         date: first_date,
@@ -394,17 +396,26 @@ export async function POST(req: Request) {
         confirmed: true, // Recurring bookings are always confirmed
         present: false,
         cancelled: false,
+        is_recurring: true,
+        created_by: user_id,
         recurring_booking_id: data.id,
-      });
+      }).select().single();
 
       if (bookingError) {
         console.error('Error creating first recurring booking instance:', bookingError);
-        // Don't fail the entire operation, just log the error
+        return NextResponse.json(
+          { error: `Failed to create initial booking: ${bookingError.message}` },
+          { status: 500 }
+        );
       } else {
-        console.log(`Created first recurring booking instance for ${first_date} at ${start_time}`);
+        console.log(`✅ Created first recurring booking instance:`, bookingData);
       }
     } catch (error) {
       console.error('Error in creating first recurring booking instance:', error);
+      return NextResponse.json(
+        { error: `Failed to create initial booking: ${error.message}` },
+        { status: 500 }
+      );
     }
 
     // Auto-propagate recurring booking for the next 15 days
