@@ -245,21 +245,73 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });
     }
 
-    // Check for date conflicts with existing recurring bookings
+    // Check for actual date conflicts with existing recurring bookings
+    // We need to check if they would actually have bookings on the same dates
     for (const existing of existingRecurringBookings || []) {
+      console.log(`Checking conflicts with existing recurring booking: ${existing.id}`);
+
       // Check if the new recurring booking would conflict with existing one
-      // We need to check if their date ranges overlap
+      // by checking specific dates where both would be active
       const newFirstDate = new Date(first_date);
-      const newLastDate = last_date ? new Date(last_date) : null;
+      const newLastDate = last_date
+        ? new Date(last_date)
+        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year from now if no end date
       const existingFirstDate = new Date(existing.first_date);
-      const existingLastDate = existing.last_date ? new Date(existing.last_date) : null;
+      const existingLastDate = existing.last_date
+        ? new Date(existing.last_date)
+        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year from now if no end date
 
-      // Simple overlap check: if either booking's range overlaps with the other
-      const hasOverlap =
-        (newLastDate === null || newLastDate >= existingFirstDate) &&
-        (existingLastDate === null || existingLastDate >= newFirstDate);
+      // Check for overlap in date ranges first
+      const hasDateRangeOverlap =
+        newLastDate >= existingFirstDate && existingLastDate >= newFirstDate;
 
-      if (hasOverlap) {
+      if (!hasDateRangeOverlap) {
+        console.log(`No date range overlap with existing booking ${existing.id}`);
+        continue; // No overlap in date ranges, so no conflict possible
+      }
+
+      console.log(`Date range overlap detected, checking specific dates...`);
+
+      // Now check if they would actually have bookings on the same dates
+      // Check the next 30 days from the overlap period to see if they conflict
+      const checkStartDate = new Date(
+        Math.max(newFirstDate.getTime(), existingFirstDate.getTime()),
+      );
+      const checkEndDate = new Date(Math.min(newLastDate.getTime(), existingLastDate.getTime()));
+
+      // Limit check to next 30 days to avoid performance issues
+      const maxCheckDate = new Date(checkStartDate);
+      maxCheckDate.setDate(maxCheckDate.getDate() + 30);
+      const actualCheckEndDate = checkEndDate > maxCheckDate ? maxCheckDate : checkEndDate;
+
+      let conflictFound = false;
+      const currentCheckDate = new Date(checkStartDate);
+
+      while (currentCheckDate <= actualCheckEndDate && !conflictFound) {
+        const checkDateString = currentCheckDate.toISOString().split('T')[0];
+
+        // Check if new booking would be active on this date
+        const newDiffDays = Math.floor(
+          (currentCheckDate.getTime() - newFirstDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const newWouldBeActive = newDiffDays >= 0 && newDiffDays % recurrence_interval_days === 0;
+
+        // Check if existing booking would be active on this date
+        const existingDiffDays = Math.floor(
+          (currentCheckDate.getTime() - existingFirstDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const existingWouldBeActive =
+          existingDiffDays >= 0 && existingDiffDays % existing.recurrence_interval_days === 0;
+
+        if (newWouldBeActive && existingWouldBeActive) {
+          conflictFound = true;
+          console.log(`Conflict found on date: ${checkDateString}`);
+        }
+
+        currentCheckDate.setDate(currentCheckDate.getDate() + 1);
+      }
+
+      if (conflictFound) {
         return NextResponse.json(
           {
             error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${existing.first_date}${existing.last_date ? ` to ${existing.last_date}` : ' onwards'})`,
@@ -267,6 +319,8 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
+
+      console.log(`No specific date conflicts found with existing booking ${existing.id}`);
     }
 
     // Check for conflicts with regular bookings in the next 6 weeks
