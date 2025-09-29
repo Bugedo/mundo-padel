@@ -3,6 +3,21 @@ import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
 // import { getBuenosAiresDate, getDayOfWeekBuenosAires, formatDateForAPI } from '@/lib/timezoneUtils'; // Not used
 
+interface BookingToCreate {
+  user_id: string;
+  court: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmed: boolean;
+  present: boolean;
+  cancelled: boolean;
+  is_recurring: boolean;
+  recurring_booking_id: string;
+  created_by: string;
+}
+
 // Helper function to get day name (currently not used)
 // function getDayName(dayNumber: number): string {
 //   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -14,6 +29,121 @@ const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+// Helper function to propagate recurring booking for specific dates
+async function propagateRecurringBooking(
+  recurringBookingId: string,
+  startDate: string,
+  daysAhead: number = 15,
+) {
+  try {
+    console.log(
+      `🔄 Auto-propagating recurring booking ${recurringBookingId} for ${daysAhead} days from ${startDate}`,
+    );
+
+    // Get the recurring booking details
+    const { data: recurring, error: recurringError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .eq('id', recurringBookingId)
+      .single();
+
+    if (recurringError || !recurring) {
+      console.error('Error fetching recurring booking for propagation:', recurringError);
+      return { success: false, error: recurringError };
+    }
+
+    // Calculate date range
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(startDateObj);
+    endDateObj.setDate(endDateObj.getDate() + daysAhead);
+
+    // Get existing bookings for this recurring booking in the date range
+    const { data: existingBookings, error: existingError } = await supabaseAdmin
+      .from('bookings')
+      .select('date')
+      .eq('recurring_booking_id', recurringBookingId)
+      .gte('date', startDate)
+      .lte('date', endDateObj.toISOString().split('T')[0]);
+
+    if (existingError) {
+      console.error('Error fetching existing bookings for propagation:', existingError);
+      return { success: false, error: existingError };
+    }
+
+    const existingDates = new Set(existingBookings?.map((b) => b.date) || []);
+    const bookingsToCreate: BookingToCreate[] = [];
+
+    // Generate bookings for each applicable date
+    const currentDate = new Date(startDateObj);
+    currentDate.setDate(currentDate.getDate() + 1); // Start from the day after first_date
+
+    while (currentDate <= endDateObj) {
+      const dateString = currentDate.toISOString().split('T')[0];
+
+      // Skip if booking already exists for this date
+      if (existingDates.has(dateString)) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
+
+      // Check if this date should have a recurring booking
+      const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
+        'should_have_recurring_booking',
+        {
+          p_recurring_id: recurringBookingId,
+          p_check_date: dateString,
+        },
+      );
+
+      if (checkError) {
+        console.error(`Error checking recurring booking for ${dateString}:`, checkError);
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
+
+      if (shouldBeActive) {
+        bookingsToCreate.push({
+          user_id: recurring.user_id,
+          court: recurring.court,
+          date: dateString,
+          start_time: recurring.start_time,
+          end_time: recurring.end_time,
+          duration_minutes: recurring.duration_minutes,
+          confirmed: true,
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          recurring_booking_id: recurringBookingId,
+          created_by: recurring.user_id,
+        });
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Batch insert all bookings
+    if (bookingsToCreate.length > 0) {
+      const { error: insertError } = await supabaseAdmin.from('bookings').insert(bookingsToCreate);
+
+      if (insertError) {
+        console.error('Error creating propagated bookings:', insertError);
+        return { success: false, error: insertError };
+      }
+
+      console.log(
+        `✅ Auto-propagated ${bookingsToCreate.length} bookings for recurring ${recurringBookingId}`,
+      );
+      return { success: true, bookingsCreated: bookingsToCreate.length };
+    } else {
+      console.log(`ℹ️ No new bookings needed for recurring ${recurringBookingId} (all covered)`);
+      return { success: true, bookingsCreated: 0 };
+    }
+  } catch (error) {
+    console.error('Error in auto-propagation:', error);
+    return { success: false, error };
+  }
+}
 
 export async function GET() {
   try {
@@ -223,7 +353,29 @@ export async function POST(req: Request) {
       console.error('Error in creating first recurring booking instance:', error);
     }
 
-    return NextResponse.json(data);
+    // Auto-propagate recurring booking for the next 15 days
+    try {
+      console.log(`🚀 Starting auto-propagation for new recurring booking ${data.id}`);
+      const propagationResult = await propagateRecurringBooking(data.id, first_date, 15);
+
+      if (propagationResult.success) {
+        console.log(
+          `✅ Auto-propagation completed: ${propagationResult.bookingsCreated} bookings created`,
+        );
+      } else {
+        console.error('❌ Auto-propagation failed:', propagationResult.error);
+        // Don't fail the entire operation, just log the error
+      }
+    } catch (error) {
+      console.error('Error in auto-propagation:', error);
+      // Don't fail the entire operation, just log the error
+    }
+
+    return NextResponse.json({
+      ...data,
+      auto_propagated: true,
+      propagation_result: 'Propagation initiated for next 15 days',
+    });
   } catch (error) {
     console.error('Recurring bookings POST error:', error);
     return NextResponse.json(
