@@ -19,8 +19,9 @@ export function getBuenosAiresDate(): Date {
  * Convert a UTC date to Buenos Aires timezone
  */
 export function toBuenosAiresDate(date: Date): Date {
-  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
-  return new Date(utc + BUENOS_AIRES_OFFSET * 60000);
+  // For date strings like '2025-09-30', we want to treat them as local dates in Buenos Aires
+  // So we don't apply timezone conversion, just return the date as-is
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 /**
@@ -37,6 +38,13 @@ export function toUTC(date: Date): Date {
 export function formatDateForAPI(date: Date): string {
   const buenosAiresDate = toBuenosAiresDate(date);
   return buenosAiresDate.toISOString().split('T')[0];
+}
+
+/**
+ * Format date as YYYY-MM-DD without timezone conversion (for Turnero)
+ */
+export function formatDateForAPIWithoutConversion(date: Date): string {
+  return date.toISOString().split('T')[0];
 }
 
 /**
@@ -102,6 +110,22 @@ export function isBookingExpiredBuenosAires(expiresAt: string | null): boolean {
 export function getAvailableDatesBuenosAires(): Date[] {
   const dates: Date[] = [];
   const today = getBuenosAiresDate();
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    dates.push(date);
+  }
+
+  return dates;
+}
+
+/**
+ * Get available dates without timezone conversion (for Turnero)
+ */
+export function getAvailableDatesWithoutConversion(): Date[] {
+  const dates: Date[] = [];
+  const today = new Date();
 
   for (let i = 0; i < 7; i++) {
     const date = new Date(today);

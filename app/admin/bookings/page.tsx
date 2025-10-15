@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminTurnero from './AdminTurnero';
-import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, formatDateForAPIWithoutConversion } from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
@@ -36,7 +36,7 @@ export default function BookingsAdminPage() {
   // Función para obtener reservas de una fecha específica (con cache)
   const getBookingsForDate = useCallback(
     (date: Date): Booking[] => {
-      const dateString = formatDateForAPI(date);
+      const dateString = formatDateForAPIWithoutConversion(date);
       return bookingsCache[dateString] || [];
     },
     [bookingsCache],
@@ -46,7 +46,7 @@ export default function BookingsAdminPage() {
   const preloadBookings = useCallback(
     async (dates: Date[]) => {
       const datesToLoad = dates.filter((date) => {
-        const dateString = formatDateForAPI(date);
+        const dateString = formatDateForAPIWithoutConversion(date);
         return !bookingsCache[dateString] && !loadingDates.has(dateString);
       });
 
@@ -55,7 +55,7 @@ export default function BookingsAdminPage() {
       // Marcar fechas como cargando
       setLoadingDates((prev) => {
         const newSet = new Set(prev);
-        datesToLoad.forEach((date) => newSet.add(formatDateForAPI(date)));
+        datesToLoad.forEach((date) => newSet.add(formatDateForAPIWithoutConversion(date)));
         return newSet;
       });
 
@@ -64,13 +64,13 @@ export default function BookingsAdminPage() {
         const batchSize = 2;
         for (let i = 0; i < datesToLoad.length; i += batchSize) {
           const batch = datesToLoad.slice(i, i + batchSize);
-          
+
           const promises = batch.map(async (date) => {
-            const dateString = formatDateForAPI(date);
-            const res = await fetch(`/api/bookings?date=${dateString}`, { 
+            const dateString = formatDateForAPIWithoutConversion(date);
+            const res = await fetch(`/api/bookings?date=${dateString}`, {
               cache: 'no-store',
               // Agregar timeout para evitar requests colgados
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(8000),
             });
             const data = await res.json();
             return { dateString, bookings: res.ok ? (data as Booking[]) : [] };
@@ -89,7 +89,7 @@ export default function BookingsAdminPage() {
 
           // Pequeña pausa entre lotes para no sobrecargar el servidor
           if (i + batchSize < datesToLoad.length) {
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise((resolve) => setTimeout(resolve, 150));
           }
         }
       } catch (error) {
@@ -98,7 +98,7 @@ export default function BookingsAdminPage() {
         // Remover fechas de la lista de cargando
         setLoadingDates((prev) => {
           const newSet = new Set(prev);
-          datesToLoad.forEach((date) => newSet.delete(formatDateForAPI(date)));
+          datesToLoad.forEach((date) => newSet.delete(formatDateForAPIWithoutConversion(date)));
           return newSet;
         });
       }
@@ -108,7 +108,7 @@ export default function BookingsAdminPage() {
 
   // Función para recargar reservas de una fecha específica
   const reloadBookingsForDate = useCallback(async (date: Date) => {
-    const dateString = formatDateForAPI(date);
+    const dateString = formatDateForAPIWithoutConversion(date);
 
     setLoadingDates((prev) => new Set(prev).add(dateString));
 
@@ -136,7 +136,7 @@ export default function BookingsAdminPage() {
   // Función para obtener reservas de la fecha seleccionada (mantener compatibilidad)
   const fetchBookings = useCallback(async () => {
     setLoading(true);
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
     // Si ya tenemos las reservas en cache, usarlas
     if (bookingsCache[dateString]) {
@@ -158,12 +158,12 @@ export default function BookingsAdminPage() {
       date.setDate(today.getDate() + i);
       initialDates.push(date);
     }
-    
+
     // Precargar con delay para no bloquear el render inicial
     const timer = setTimeout(() => {
       preloadBookings(initialDates);
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, [preloadBookings]);
 
@@ -173,7 +173,7 @@ export default function BookingsAdminPage() {
   }, [selectedDate, fetchBookings]);
 
   const updateBooking = async (id: string, field: keyof Booking, value: boolean) => {
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
     console.log('Updating booking:', { id, field, value, dateString });
 
     const res = await fetch(`/api/bookings?date=${dateString}`, {
@@ -192,14 +192,15 @@ export default function BookingsAdminPage() {
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="flex items-center space-x-2">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-        <span className="text-gray-600">Cargando reservas...</span>
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Cargando reservas...</span>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   return (
     <div className="space-y-6">

@@ -5,8 +5,9 @@ import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
 import {
   getBuenosAiresDate,
-  formatDateForAPI,
+  formatDateForAPIWithoutConversion,
   getAvailableDatesBuenosAires,
+  getAvailableDatesWithoutConversion,
   isTodayBuenosAires,
   isBookingExpiredBuenosAires,
 } from '@/lib/timezoneUtils';
@@ -99,9 +100,9 @@ export default function Turnero() {
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
 
-  // Generar los 7 días disponibles (hoy + 6 posteriores) en horario de Buenos Aires
+  // Generar los 7 días disponibles (hoy + 6 posteriores) sin conversión de zona horaria
   const getAvailableDates = (): Date[] => {
-    return getAvailableDatesBuenosAires();
+    return getAvailableDatesWithoutConversion();
   };
 
   const formatDayName = (date: Date) => {
@@ -125,7 +126,7 @@ export default function Turnero() {
   };
 
   const fetchBookings = useCallback(async () => {
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
     // Use public endpoint to get bookings for the date
     const response = await fetch(`/api/public-bookings?date=${dateString}`, {
@@ -142,7 +143,7 @@ export default function Turnero() {
 
   // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
     // Use the database function to check which recurring bookings should be active on this date
     const { data: recurringBookings, error } = await supabase
@@ -276,7 +277,7 @@ export default function Turnero() {
       return;
     }
 
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
     const [h, m] = selectedSlot.split(':').map(Number);
     const startMinutes = h * 60 + m;

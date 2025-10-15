@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getBuenosAiresDate,
-  formatDateForAPI,
+  formatDateForAPIWithoutConversion,
   isBookingExpiredBuenosAires,
 } from '@/lib/timezoneUtils';
 
@@ -125,17 +125,17 @@ export default function AdminTurnero({
 
   // Obtener reservas de la fecha seleccionada desde el cache
   const bookings = getBookingsForDate(selectedDate);
-  const loading = loadingDates.has(formatDateForAPI(selectedDate));
+  const loading = loadingDates.has(formatDateForAPIWithoutConversion(selectedDate));
 
   // Precargar reservas de la semana cuando cambie el offset (con delay para evitar sobrecarga)
   useEffect(() => {
     const weekDates = getWeekDates(currentWeekOffset);
-    
+
     // Precargar con delay para evitar múltiples llamadas rápidas
     const timer = setTimeout(() => {
       preloadBookings(weekDates);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, [currentWeekOffset, preloadBookings]);
 
@@ -409,7 +409,7 @@ export default function AdminTurnero({
     if (!selectedSlot || !selectedUser) return;
     // Note: We don't need to check canFitDuration here since we already validated when selecting the slot
 
-    const dateString = formatDateForAPI(selectedDate);
+    const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
     const [h, m] = selectedSlot.split(':').map(Number);
     const startMinutes = h * 60 + m;
@@ -479,9 +479,9 @@ export default function AdminTurnero({
           {/* Week Days Selector */}
           <div className="flex gap-1">
             {getWeekDates(currentWeekOffset).map((date, index) => {
-              const dateString = formatDateForAPI(date);
+              const dateString = formatDateForAPIWithoutConversion(date);
               const isLoading = loadingDates.has(dateString);
-              
+
               return (
                 <button
                   key={index}

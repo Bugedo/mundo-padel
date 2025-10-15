@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, formatDateForAPIWithoutConversion } from '@/lib/timezoneUtils';
 
 interface BookingToCreate {
   user_id: string;
@@ -66,8 +66,8 @@ export async function POST() {
     const startDate = new Date(now);
     const endDate = new Date(now);
     endDate.setDate(endDate.getDate() + 15);
-    const startDateString = formatDateForAPI(startDate);
-    const endDateString = formatDateForAPI(endDate);
+    const startDateString = formatDateForAPIWithoutConversion(startDate);
+    const endDateString = formatDateForAPIWithoutConversion(endDate);
 
     console.log(`📅 Ensuring population range: ${startDateString} to ${endDateString}`);
     console.log('🔍 Strategy: Check each day and fill any gaps found');
@@ -102,7 +102,7 @@ export async function POST() {
     // Process each day in the range
     const currentDate = new Date(startDate);
     while (currentDate <= endDate) {
-      const dateString = formatDateForAPI(currentDate);
+      const dateString = formatDateForAPIWithoutConversion(currentDate);
       const existingForDate = existingBookingsMap.get(dateString) || new Set();
 
       console.log(`\n📅 Processing date: ${dateString}`);
@@ -201,7 +201,7 @@ export async function POST() {
       executedAt: now.toISOString(),
       timezone: 'Buenos Aires (UTC-3)',
       dateRange: {
-        start: formatDateForAPI(now),
+        start: formatDateForAPIWithoutConversion(now),
         end: endDateString,
       },
     });

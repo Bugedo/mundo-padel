@@ -232,121 +232,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check for conflicts with existing recurring bookings for the same time slot and court
+    // Check for conflicts with existing recurring bookings
+    // Only check if there's another recurring booking with overlapping time slots on the same court
     const { data: existingRecurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
       .eq('court', court)
-      .eq('start_time', start_time)
-      .eq('end_time', end_time)
-      .eq('active', true);
+      .eq('active', true)
+      .or(`start_time.lt.${end_time},end_time.gt.${start_time}`);
 
     if (recurringError) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });
     }
 
-    // Check for actual date conflicts with existing recurring bookings
-    // We need to check if they would actually have bookings on the same dates
-    for (const existing of existingRecurringBookings || []) {
-      console.log(`Checking conflicts with existing recurring booking: ${existing.id}`);
-
-      // Check if the new recurring booking would conflict with existing one
-      // by checking specific dates where both would be active
-      const newFirstDate = new Date(first_date);
-      const newLastDate = last_date
-        ? new Date(last_date)
-        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year from now if no end date
-      const existingFirstDate = new Date(existing.first_date);
-      const existingLastDate = existing.last_date
-        ? new Date(existing.last_date)
-        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year from now if no end date
-
-      // Check for overlap in date ranges first
-      const hasDateRangeOverlap =
-        newLastDate >= existingFirstDate && existingLastDate >= newFirstDate;
-
-      if (!hasDateRangeOverlap) {
-        console.log(`No date range overlap with existing booking ${existing.id}`);
-        continue; // No overlap in date ranges, so no conflict possible
-      }
-
-      console.log(`Date range overlap detected, checking specific dates...`);
-
-      // Now check if they would actually have bookings on the same dates
-      // Check the next 30 days from the overlap period to see if they conflict
-      const checkStartDate = new Date(
-        Math.max(newFirstDate.getTime(), existingFirstDate.getTime()),
+    if (existingRecurringBookings && existingRecurringBookings.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Time slot conflicts with existing recurring booking: ${existingRecurringBookings[0].start_time} - ${existingRecurringBookings[0].end_time}`,
+        },
+        { status: 409 },
       );
-      const checkEndDate = new Date(Math.min(newLastDate.getTime(), existingLastDate.getTime()));
-
-      // Limit check to next 30 days to avoid performance issues
-      const maxCheckDate = new Date(checkStartDate);
-      maxCheckDate.setDate(maxCheckDate.getDate() + 30);
-      const actualCheckEndDate = checkEndDate > maxCheckDate ? maxCheckDate : checkEndDate;
-
-      let conflictFound = false;
-      const currentCheckDate = new Date(checkStartDate);
-
-      while (currentCheckDate <= actualCheckEndDate && !conflictFound) {
-        const checkDateString = currentCheckDate.toISOString().split('T')[0];
-
-        // Check if new booking would be active on this date
-        const newDiffDays = Math.floor(
-          (currentCheckDate.getTime() - newFirstDate.getTime()) / (1000 * 60 * 60 * 24),
-        );
-        const newWouldBeActive = newDiffDays >= 0 && newDiffDays % recurrence_interval_days === 0;
-
-        // Check if existing booking would be active on this date
-        const existingDiffDays = Math.floor(
-          (currentCheckDate.getTime() - existingFirstDate.getTime()) / (1000 * 60 * 60 * 24),
-        );
-        const existingWouldBeActive =
-          existingDiffDays >= 0 && existingDiffDays % existing.recurrence_interval_days === 0;
-
-        if (newWouldBeActive && existingWouldBeActive) {
-          conflictFound = true;
-          console.log(`Conflict found on date: ${checkDateString}`);
-        }
-
-        currentCheckDate.setDate(currentCheckDate.getDate() + 1);
-      }
-
-      if (conflictFound) {
-        return NextResponse.json(
-          {
-            error: `Time slot conflicts with existing recurring booking: ${existing.start_time} - ${existing.end_time} (${existing.first_date}${existing.last_date ? ` to ${existing.last_date}` : ' onwards'})`,
-          },
-          { status: 409 },
-        );
-      }
-
-      console.log(`No specific date conflicts found with existing booking ${existing.id}`);
     }
 
-    // Check for conflicts with regular bookings in the next 6 weeks
-    // We'll use the database function to check if any dates in the range have conflicts
-    // const { data: conflictCheck, error: conflictError } = await supabaseAdmin.rpc(
-    //   'should_have_recurring_booking',
-    //   {
-    //     p_recurring_id: null, // We'll check manually since this is a new booking
-    //     p_check_date: first_date,
-    //   },
-    // );
-
-    // if (conflictError) {
-    //   console.warn('Could not check conflicts with database function:', conflictError);
-    //   // Continue without the database function check
-    // }
-
-    // Simple check: verify that the first_date doesn't have a conflicting booking
+    // Check for conflicts with regular bookings only on the first_date
+    // Since regular bookings can only be made 6 days in advance, we only need to check the first_date
     const { data: firstDateBookings, error: firstDateError } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .eq('date', first_date)
       .eq('court', court)
-      .eq('start_time', start_time)
-      .eq('end_time', end_time)
-      .neq('cancelled', true);
+      .neq('cancelled', true)
+      .or(`start_time.lt.${end_time},end_time.gt.${start_time}`);
 
     if (firstDateError) {
       return NextResponse.json({ error: firstDateError.message }, { status: 500 });
@@ -355,7 +271,7 @@ export async function POST(req: Request) {
     if (firstDateBookings && firstDateBookings.length > 0) {
       return NextResponse.json(
         {
-          error: `Date ${first_date} already has a booking for this time slot and court`,
+          error: `Time slot conflicts with existing booking on ${first_date} at ${firstDateBookings[0].start_time}-${firstDateBookings[0].end_time}`,
         },
         { status: 409 },
       );
@@ -384,28 +300,32 @@ export async function POST(req: Request) {
 
     // Create the first instance of the recurring booking
     console.log(`Creating first recurring booking instance for ${first_date} at ${start_time}`);
-    
+
     try {
-      const { data: bookingData, error: bookingError } = await supabaseAdmin.from('bookings').insert({
-        user_id,
-        court,
-        date: first_date,
-        start_time,
-        end_time,
-        duration_minutes,
-        confirmed: true, // Recurring bookings are always confirmed
-        present: false,
-        cancelled: false,
-        is_recurring: true,
-        created_by: user_id,
-        recurring_booking_id: data.id,
-      }).select().single();
+      const { data: bookingData, error: bookingError } = await supabaseAdmin
+        .from('bookings')
+        .insert({
+          user_id,
+          court,
+          date: first_date,
+          start_time,
+          end_time,
+          duration_minutes,
+          confirmed: true, // Recurring bookings are always confirmed
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          created_by: user_id,
+          recurring_booking_id: data.id,
+        })
+        .select()
+        .single();
 
       if (bookingError) {
         console.error('Error creating first recurring booking instance:', bookingError);
         return NextResponse.json(
           { error: `Failed to create initial booking: ${bookingError.message}` },
-          { status: 500 }
+          { status: 500 },
         );
       } else {
         console.log(`✅ Created first recurring booking instance:`, bookingData);
@@ -414,7 +334,7 @@ export async function POST(req: Request) {
       console.error('Error in creating first recurring booking instance:', error);
       return NextResponse.json(
         { error: `Failed to create initial booking: ${error.message}` },
-        { status: 500 }
+        { status: 500 },
       );
     }
 

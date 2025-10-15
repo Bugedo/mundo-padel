@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { formatTimeForDisplay } from '@/lib/timeFormatUtils';
+import { getDayOfWeekBuenosAires, getDayNameBuenosAires } from '@/lib/timezoneUtils';
 
 interface RecurringBooking {
   id: string;
@@ -64,15 +65,15 @@ const allSlots = [
 
 const defaultSlots = allSlots.filter((slot) => slot.start >= '16:30');
 
-const daysOfWeek = [
-  { value: 0, label: 'Domingo' },
-  { value: 1, label: 'Lunes' },
-  { value: 2, label: 'Martes' },
-  { value: 3, label: 'Miércoles' },
-  { value: 4, label: 'Jueves' },
-  { value: 5, label: 'Viernes' },
-  { value: 6, label: 'Sábado' },
-];
+// const daysOfWeek = [
+//   { value: 0, label: 'Domingo' },
+//   { value: 1, label: 'Lunes' },
+//   { value: 2, label: 'Martes' },
+//   { value: 3, label: 'Miércoles' },
+//   { value: 4, label: 'Jueves' },
+//   { value: 5, label: 'Viernes' },
+//   { value: 6, label: 'Sábado' },
+// ];
 
 export default function RecurringBookingsPage() {
   const [recurringBookings, setRecurringBookings] = useState<RecurringBooking[]>([]);
@@ -552,7 +553,8 @@ export default function RecurringBookingsPage() {
               />
               {firstDate && (
                 <p className="text-sm text-neutral mt-1">
-                  Día de la semana: {daysOfWeek[new Date(firstDate).getDay()]?.label}
+                  Día de la semana:{' '}
+                  {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(firstDate)))}
                 </p>
               )}
             </div>
@@ -667,7 +669,7 @@ export default function RecurringBookingsPage() {
                 <td className="px-3 py-3">
                   <div className="space-y-1">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
-                      {daysOfWeek[new Date(booking.first_date).getDay()]?.label}
+                      {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(booking.first_date)))}
                     </span>
                     <div className="text-xs text-neutral-muted">
                       {booking.first_date} (cada {booking.recurrence_interval_days} días)
@@ -857,7 +859,8 @@ export default function RecurringBookingsPage() {
                 />
                 {editForm.first_date && (
                   <p className="text-sm text-neutral mt-1">
-                    Día de la semana: {daysOfWeek[new Date(editForm.first_date).getDay()]?.label}
+                    Día de la semana:{' '}
+                    {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(editForm.first_date)))}
                   </p>
                 )}
               </div>
