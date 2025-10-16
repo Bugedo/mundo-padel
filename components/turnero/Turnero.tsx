@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { useUser } from '@/context/UserContext';
 import {
@@ -96,9 +96,50 @@ export default function Turnero() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [showEarly, setShowEarly] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsCache, setBookingsCache] = useState<{ [date: string]: Booking[] }>({});
   const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
+
+  // Precalculate red slots for all dates to avoid glitches
+  const redSlotsByDate = useMemo(() => {
+    const redSlots: { [date: string]: Set<string> } = {};
+
+    Object.keys(bookingsCache).forEach((dateString) => {
+      const bookingsForDate = bookingsCache[dateString];
+      const redSlotsForDate = new Set<string>();
+
+      // Calculate red slots for this date
+      allSlots.forEach((slot) => {
+        const [th, tm] = slot.start.split(':').map(Number);
+        const checkMinutes = th * 60 + tm;
+
+        // Get all active bookings that overlap with this time
+        const overlappingBookings = bookingsForDate.filter((b) => {
+          const [bh, bm] = b.start_time.split(':').map(Number);
+          const bStart = bh * 60 + bm;
+          const bEnd = bStart + (b.duration_minutes || 90);
+          const active =
+            (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
+            !b.cancelled;
+          return active && checkMinutes >= bStart && checkMinutes < bEnd;
+        });
+
+        // Count unique courts that are occupied
+        const occupiedCourts = new Set(
+          overlappingBookings.map((b) => b.court).filter((court) => court !== null),
+        );
+
+        if (occupiedCourts.size >= 3) {
+          redSlotsForDate.add(slot.start);
+        }
+      });
+
+      redSlots[dateString] = redSlotsForDate;
+    });
+
+    return redSlots;
+  }, [bookingsCache]);
 
   // Generar los 7 días disponibles (hoy + 6 posteriores) sin conversión de zona horaria
   const getAvailableDates = (): Date[] => {
@@ -121,25 +162,33 @@ export default function Turnero() {
     return isTodayBuenosAires(date);
   };
 
-  const isSelected = (date: Date) => {
-    return date.toDateString() === selectedDate.toDateString();
-  };
+  const isSelected = useCallback(
+    (date: Date) => {
+      return date.toDateString() === selectedDate.toDateString();
+    },
+    [selectedDate],
+  );
+
+  const handleDateChange = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      // Immediately update bookings from cache
+      const dateString = formatDateForAPIWithoutConversion(date);
+      if (bookingsCache[dateString]) {
+        setBookings(bookingsCache[dateString]);
+      }
+    },
+    [bookingsCache],
+  );
 
   const fetchBookings = useCallback(async () => {
     const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
-    // Use public endpoint to get bookings for the date
-    const response = await fetch(`/api/public-bookings?date=${dateString}`, {
-      cache: 'no-store',
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      setBookings(data);
-    } else {
-      console.error('Error fetching bookings:', response.status);
+    // Only use cache - no more API calls after initial load
+    if (bookingsCache[dateString]) {
+      setBookings(bookingsCache[dateString]);
     }
-  }, [selectedDate]);
+  }, [selectedDate, bookingsCache]);
 
   // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
@@ -196,78 +245,93 @@ export default function Turnero() {
     }
   }, [selectedDate]);
 
+  // Load all bookings only once on component mount
   useEffect(() => {
-    const loadBookings = async () => {
-      await fetchBookings();
-      await fetchRecurringBookings();
+    const loadInitialData = async () => {
+      const availableDates = getAvailableDatesWithoutConversion();
+      const newCache: { [date: string]: Booking[] } = {};
+
+      try {
+        // Load bookings for all dates in parallel - ONLY ONCE
+        const promises = availableDates.map(async (date) => {
+          const dateString = formatDateForAPIWithoutConversion(date);
+          const response = await fetch(`/api/public-bookings?date=${dateString}`, {
+            cache: 'no-store',
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            newCache[dateString] = data;
+          } else {
+            console.error(`Error fetching bookings for ${dateString}:`, response.status);
+            newCache[dateString] = [];
+          }
+        });
+
+        await Promise.all(promises);
+        setBookingsCache(newCache);
+
+        // Set bookings for the currently selected date
+        const selectedDateString = formatDateForAPIWithoutConversion(selectedDate);
+        setBookings(newCache[selectedDateString] || []);
+      } catch (error) {
+        console.error('Error loading initial bookings:', error);
+      }
     };
 
-    loadBookings();
-  }, [selectedDate, fetchBookings, fetchRecurringBookings]);
+    loadInitialData();
+  }, []); // Empty dependency array - only run once
 
-  const isFullyReserved = (time: string) => {
-    const [th, tm] = time.split(':').map(Number);
-    const checkMinutes = th * 60 + tm;
+  // Load recurring bookings for the selected date
+  useEffect(() => {
+    fetchRecurringBookings();
+  }, [selectedDate, fetchRecurringBookings]);
 
-    // Get all active bookings that overlap with this time
-    const overlappingBookings = bookings.filter((b) => {
-      const [bh, bm] = b.start_time.split(':').map(Number);
-      const bStart = bh * 60 + bm;
-      const bEnd = bStart + (b.duration_minutes || 90);
-      const active =
-        (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
-        !b.cancelled;
-      return active && checkMinutes >= bStart && checkMinutes < bEnd;
-    });
+  const isFullyReserved = useCallback(
+    (time: string) => {
+      const dateString = formatDateForAPIWithoutConversion(selectedDate);
+      return redSlotsByDate[dateString]?.has(time) || false;
+    },
+    [selectedDate, redSlotsByDate],
+  );
 
-    // Count unique courts that are occupied
-    const occupiedCourts = new Set(
-      overlappingBookings.map((b) => b.court).filter((court) => court !== null),
-    );
+  const canFitDuration = useCallback(
+    (start_time: string, dur: number) => {
+      const [h, m] = start_time.split(':').map(Number);
+      const startMinutes = h * 60 + m;
+      const endMinutes = startMinutes + dur;
+      const dateString = formatDateForAPIWithoutConversion(selectedDate);
 
-    return occupiedCourts.size >= 3;
-  };
+      for (let minute = startMinutes; minute < endMinutes; minute += 30) {
+        const timeString = `${Math.floor(minute / 60)
+          .toString()
+          .padStart(2, '0')}:${(minute % 60).toString().padStart(2, '0')}`;
 
-  const canFitDuration = (start_time: string, dur: number) => {
-    const [h, m] = start_time.split(':').map(Number);
-    const startMinutes = h * 60 + m;
-    const endMinutes = startMinutes + dur;
+        if (redSlotsByDate[dateString]?.has(timeString)) {
+          return false;
+        }
+      }
 
-    for (let minute = startMinutes; minute < endMinutes; minute += 30) {
-      // Get all active bookings that overlap with this minute
-      const overlappingBookings = bookings.filter((b) => {
-        const [bh, bm] = b.start_time.split(':').map(Number);
-        const bStart = bh * 60 + bm;
-        const bEnd = bStart + (b.duration_minutes || 90);
-        const active =
-          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
-          !b.cancelled;
-        return active && minute >= bStart && minute < bEnd;
-      });
+      return true;
+    },
+    [selectedDate, redSlotsByDate],
+  );
 
-      // Count unique courts that are occupied
-      const occupiedCourts = new Set(
-        overlappingBookings.map((b) => b.court).filter((court) => court !== null),
-      );
+  const isHighlighted = useCallback(
+    (time: string) => {
+      const ref = selectedSlot || hoverSlot;
+      if (!ref) return false;
+      if (!canFitDuration(ref, duration)) return false;
 
-      if (occupiedCourts.size >= 3) return false;
-    }
+      const [h, m] = time.split(':').map(Number);
+      const [rh, rm] = ref.split(':').map(Number);
+      const slotMinutes = h * 60 + m;
+      const refMinutes = rh * 60 + rm;
 
-    return true;
-  };
-
-  const isHighlighted = (time: string) => {
-    const ref = selectedSlot || hoverSlot;
-    if (!ref) return false;
-    if (!canFitDuration(ref, duration)) return false;
-
-    const [h, m] = time.split(':').map(Number);
-    const [rh, rm] = ref.split(':').map(Number);
-    const slotMinutes = h * 60 + m;
-    const refMinutes = rh * 60 + rm;
-
-    return slotMinutes >= refMinutes && slotMinutes < refMinutes + duration;
-  };
+      return slotMinutes >= refMinutes && slotMinutes < refMinutes + duration;
+    },
+    [selectedSlot, hoverSlot, canFitDuration, duration],
+  );
 
   // This version checks overlapping ranges for court assignment
   const createBooking = async () => {
@@ -307,7 +371,13 @@ export default function Turnero() {
     if (response.ok) {
       const data = await response.json();
       setPendingBooking(data);
-      fetchBookings();
+
+      // Update cache for the selected date
+      const dateString = formatDateForAPIWithoutConversion(selectedDate);
+      const updatedBookings = [...bookings, data];
+      setBookings(updatedBookings);
+      setBookingsCache((prev) => ({ ...prev, [dateString]: updatedBookings }));
+
       setSelectedSlot(null);
     } else {
       const errorData = await response.json();
@@ -327,7 +397,7 @@ export default function Turnero() {
               {getAvailableDates().map((date) => (
                 <button
                   key={date.toISOString()}
-                  onClick={() => setSelectedDate(date)}
+                  onClick={() => handleDateChange(date)}
                   className={`flex flex-col items-center justify-center min-w-[60px] h-16 px-3 rounded-lg border-2 transition-all duration-200 ${
                     isSelected(date)
                       ? 'bg-accent text-dark border-accent'
