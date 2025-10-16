@@ -6,7 +6,6 @@ import { useUser } from '@/context/UserContext';
 import {
   getBuenosAiresDate,
   formatDateForAPIWithoutConversion,
-  getAvailableDatesBuenosAires,
   getAvailableDatesWithoutConversion,
   isTodayBuenosAires,
   isBookingExpiredBuenosAires,

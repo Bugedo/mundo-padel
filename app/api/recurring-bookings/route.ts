@@ -232,7 +232,7 @@ export async function POST(req: Request) {
     }
 
     // First, let's see ALL recurring bookings for this court
-    const { data: allCourtRecurringBookings, error: allCourtError } = await supabaseAdmin
+    const { data: allCourtRecurringBookings } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
       .eq('court', court)
@@ -243,7 +243,7 @@ export async function POST(req: Request) {
     // Let's also check if this specific recurring booking has been propagated to regular bookings
     if (allCourtRecurringBookings && allCourtRecurringBookings.length > 0) {
       for (const recurring of allCourtRecurringBookings) {
-        const { data: propagatedBookings, error: propagatedError } = await supabaseAdmin
+        const { data: propagatedBookings } = await supabaseAdmin
           .from('bookings')
           .select('*')
           .eq('recurring_booking_id', recurring.id)
@@ -258,7 +258,7 @@ export async function POST(req: Request) {
     }
 
     // Let's also check all regular bookings for this court and date
-    const { data: allCourtBookings, error: allCourtBookingsError } = await supabaseAdmin
+    const { data: allCourtBookings } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .eq('court', court)
@@ -289,7 +289,17 @@ export async function POST(req: Request) {
     }
 
     // Filter recurring bookings to only those that would be active on the same day of the week
-    const conflictingRecurringBookings: any[] = [];
+    const conflictingRecurringBookings: Array<{
+      id: string;
+      start_time: string;
+      end_time: string;
+      court: number;
+      user_id: string;
+      first_date: string;
+      recurrence_interval_days: number;
+      active: boolean;
+      created_at: string;
+    }> = [];
     if (existingRecurringBookings && existingRecurringBookings.length > 0) {
       for (const recurring of existingRecurringBookings) {
         // Check if this recurring booking would be active on the first_date using the database function
