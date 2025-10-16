@@ -554,7 +554,7 @@ export default function AdminTurnero({
 
       {/* Courts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((court) => (
+        {[3, 2, 1].map((court) => (
           <div key={court} className="space-y-4">
             <h3 className="text-xl font-bold text-center text-neutral bg-surface p-3 rounded border border-muted">
               Cancha {court}
