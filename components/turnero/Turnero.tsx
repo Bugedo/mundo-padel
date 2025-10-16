@@ -180,15 +180,6 @@ export default function Turnero() {
     [bookingsCache],
   );
 
-  const fetchBookings = useCallback(async () => {
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
-
-    // Only use cache - no more API calls after initial load
-    if (bookingsCache[dateString]) {
-      setBookings(bookingsCache[dateString]);
-    }
-  }, [selectedDate, bookingsCache]);
-
   // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
     const dateString = formatDateForAPIWithoutConversion(selectedDate);
@@ -279,7 +270,7 @@ export default function Turnero() {
     };
 
     loadInitialData();
-  }, []); // Empty dependency array - only run once
+  }, [selectedDate]); // Include selectedDate dependency
 
   // Load recurring bookings for the selected date
   useEffect(() => {
