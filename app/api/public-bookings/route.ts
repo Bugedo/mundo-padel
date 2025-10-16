@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       .select('*, user:profiles!recurring_bookings_user_id_fkey(full_name)')
       .eq('active', true)
       .lte('first_date', date)
-      .or(`last_date.is.null,last_date.gte.${date}`);
+      .is('last_date', null);
 
     if (recurringError) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });

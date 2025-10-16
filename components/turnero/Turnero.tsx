@@ -151,7 +151,7 @@ export default function Turnero() {
       .select('*')
       .eq('active', true)
       .lte('first_date', dateString)
-      .or(`last_date.is.null,last_date.gte.${dateString}`);
+      .is('last_date', null);
 
     if (!error && recurringBookings) {
       // Filter recurring bookings that should be active on this specific date

@@ -152,6 +152,9 @@ export default function AdminTurnero({
     { id: string; full_name: string; email: string }[]
   >([]);
 
+  // Recurring booking state
+  const [isRecurring, setIsRecurring] = useState(false);
+
   // Comment editing state
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [commentValue, setCommentValue] = useState('');
@@ -162,12 +165,15 @@ export default function AdminTurnero({
 
   // Fetch users for booking creation
   const fetchUsers = useCallback(async () => {
-    const res = await fetch('/api/users', { cache: 'no-store' });
+    const res = await fetch('/api/users?showAll=true', { cache: 'no-store' });
     const data = await res.json();
 
     if (res.ok && Array.isArray(data)) {
+      console.log('Users loaded:', data.length);
       setUsers(data);
       setFilteredUsers(data);
+    } else {
+      console.error('Error fetching users:', data);
     }
   }, []);
 
@@ -182,6 +188,7 @@ export default function AdminTurnero({
         user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(userSearchTerm.toLowerCase()),
     );
+    console.log('Filtered users:', filtered.length, 'for term:', userSearchTerm);
     setFilteredUsers(filtered);
   }, [userSearchTerm, users]);
 
@@ -423,35 +430,71 @@ export default function AdminTurnero({
     // Use the selected court
     const courtToUse = selectedCourt || 1; // Fallback to court 1 if somehow not set
 
-    const response = await fetch('/api/bookings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        user_id: selectedUser,
-        date: dateString,
-        start_time,
-        end_time,
-        duration_minutes: duration,
-        court: courtToUse, // Specify the court for admin bookings
-        confirmed: true, // Admin creates confirmed bookings
-      }),
-    });
+    if (isRecurring) {
+      // Create recurring booking
+      const response = await fetch('/api/recurring-bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: selectedUser,
+          court: courtToUse,
+          start_time,
+          end_time,
+          duration_minutes: duration,
+          first_date: dateString,
+          recurrence_interval_days: 7, // Always weekly
+        }),
+      });
 
-    if (response.ok) {
-      // Recargar las reservas de la fecha actual para actualizar el cache
-      await reloadBookingsForDate(selectedDate);
+      if (response.ok) {
+        // Recargar las reservas de la fecha actual para actualizar el cache
+        await reloadBookingsForDate(selectedDate);
 
-      alert('Reserva creada exitosamente');
-      setShowCreateForm(false);
-      setSelectedUser('');
-      setUserSearchTerm('');
-      setSelectedSlot(null);
-      setSelectedCourt(null);
+        alert('Reserva recurrente creada exitosamente');
+        setShowCreateForm(false);
+        setSelectedUser('');
+        setUserSearchTerm('');
+        setSelectedSlot(null);
+        setSelectedCourt(null);
+        setIsRecurring(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Error al crear la reserva recurrente: ${errorData.error}`);
+      }
     } else {
-      const errorData = await response.json();
-      alert(`Error al crear la reserva: ${errorData.error}`);
+      // Create regular booking
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: selectedUser,
+          date: dateString,
+          start_time,
+          end_time,
+          duration_minutes: duration,
+          court: courtToUse, // Specify the court for admin bookings
+          confirmed: true, // Admin creates confirmed bookings
+        }),
+      });
+
+      if (response.ok) {
+        // Recargar las reservas de la fecha actual para actualizar el cache
+        await reloadBookingsForDate(selectedDate);
+
+        alert('Reserva creada exitosamente');
+        setShowCreateForm(false);
+        setSelectedUser('');
+        setUserSearchTerm('');
+        setSelectedSlot(null);
+        setSelectedCourt(null);
+      } else {
+        const errorData = await response.json();
+        alert(`Error al crear la reserva: ${errorData.error}`);
+      }
     }
   };
 
@@ -902,6 +945,20 @@ export default function AdminTurnero({
                 )}
               </div>
 
+              {/* Recurring booking checkbox */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="isRecurring"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="w-4 h-4 text-accent bg-surface border-muted rounded focus:ring-accent focus:ring-2"
+                />
+                <label htmlFor="isRecurring" className="text-sm font-medium text-neutral">
+                  Reserva recurrente (semanal)
+                </label>
+              </div>
+
               {/* Action buttons */}
               <div className="flex gap-2 pt-4">
                 <button
@@ -911,6 +968,7 @@ export default function AdminTurnero({
                     setSelectedCourt(null);
                     setSelectedUser('');
                     setUserSearchTerm('');
+                    setIsRecurring(false);
                   }}
                   className="flex-1 bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors"
                 >
@@ -921,7 +979,7 @@ export default function AdminTurnero({
                   disabled={!selectedUser}
                   className="flex-1 bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover disabled:bg-muted disabled:text-neutral-muted transition-colors"
                 >
-                  Crear Reserva
+                  {isRecurring ? 'Crear Reserva Recurrente' : 'Crear Reserva'}
                 </button>
               </div>
             </div>

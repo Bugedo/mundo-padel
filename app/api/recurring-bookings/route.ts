@@ -193,7 +193,6 @@ export async function POST(req: Request) {
       end_time,
       duration_minutes,
       first_date,
-      last_date,
       recurrence_interval_days = 7,
     } = body;
     if (
@@ -232,23 +231,103 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // First, let's see ALL recurring bookings for this court
+    const { data: allCourtRecurringBookings, error: allCourtError } = await supabaseAdmin
+      .from('recurring_bookings')
+      .select('*')
+      .eq('court', court)
+      .eq('active', true);
+
+    console.log('ALL recurring bookings for court', court, ':', allCourtRecurringBookings);
+
+    // Let's also check if this specific recurring booking has been propagated to regular bookings
+    if (allCourtRecurringBookings && allCourtRecurringBookings.length > 0) {
+      for (const recurring of allCourtRecurringBookings) {
+        const { data: propagatedBookings, error: propagatedError } = await supabaseAdmin
+          .from('bookings')
+          .select('*')
+          .eq('recurring_booking_id', recurring.id)
+          .eq('date', first_date)
+          .limit(5);
+
+        console.log(
+          `Propagated bookings for recurring ${recurring.id} (${recurring.start_time}-${recurring.end_time}) on ${first_date}:`,
+          propagatedBookings,
+        );
+      }
+    }
+
+    // Let's also check all regular bookings for this court and date
+    const { data: allCourtBookings, error: allCourtBookingsError } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('court', court)
+      .eq('date', first_date)
+      .neq('cancelled', true);
+
+    console.log(
+      'ALL regular bookings for court',
+      court,
+      'on date',
+      first_date,
+      ':',
+      allCourtBookings,
+    );
+
     // Check for conflicts with existing recurring bookings
-    // Only check if there's another recurring booking with overlapping time slots on the same court
+    // Only check recurring bookings that would be active on the same day of the week
+    // We need to check if this recurring booking would be active on the first_date
     const { data: existingRecurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
       .eq('court', court)
       .eq('active', true)
-      .or(`start_time.lt.${end_time},end_time.gt.${start_time}`);
+      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
     if (recurringError) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });
     }
 
+    // Filter recurring bookings to only those that would be active on the same day of the week
+    const conflictingRecurringBookings: any[] = [];
     if (existingRecurringBookings && existingRecurringBookings.length > 0) {
+      for (const recurring of existingRecurringBookings) {
+        // Check if this recurring booking would be active on the first_date using the database function
+        const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
+          'should_have_recurring_booking',
+          {
+            p_recurring_id: recurring.id,
+            p_check_date: first_date,
+          },
+        );
+
+        if (!checkError && shouldBeActive) {
+          conflictingRecurringBookings.push(recurring);
+        }
+      }
+    }
+
+    console.log('Checking for conflicts with recurring bookings:', {
+      newBooking: { start_time, end_time, court, first_date },
+      allRecurringBookings: existingRecurringBookings?.length || 0,
+      conflictingRecurringBookingsCount: conflictingRecurringBookings.length,
+      conflictingRecurringBookings,
+      queryConditions: {
+        court,
+        active: true,
+        timeCondition: `and(start_time.lt.${end_time},end_time.gt.${start_time})`,
+      },
+    });
+
+    if (conflictingRecurringBookings && conflictingRecurringBookings.length > 0) {
+      console.log('Conflict detected with recurring booking:', {
+        newBooking: { start_time, end_time, court, first_date },
+        existingBooking: conflictingRecurringBookings[0],
+        conflictReason: `New: ${start_time}-${end_time}, Existing: ${conflictingRecurringBookings[0].start_time}-${conflictingRecurringBookings[0].end_time}`,
+      });
       return NextResponse.json(
         {
-          error: `Time slot conflicts with existing recurring booking: ${existingRecurringBookings[0].start_time} - ${existingRecurringBookings[0].end_time}`,
+          error: `Time slot conflicts with existing recurring booking: ${conflictingRecurringBookings[0].start_time} - ${conflictingRecurringBookings[0].end_time}`,
         },
         { status: 409 },
       );
@@ -256,13 +335,14 @@ export async function POST(req: Request) {
 
     // Check for conflicts with regular bookings only on the first_date
     // Since regular bookings can only be made 6 days in advance, we only need to check the first_date
+    // Since all bookings are in 30-minute blocks, we can use exact time matching
     const { data: firstDateBookings, error: firstDateError } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .eq('date', first_date)
       .eq('court', court)
       .neq('cancelled', true)
-      .or(`start_time.lt.${end_time},end_time.gt.${start_time}`);
+      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
 
     if (firstDateError) {
       return NextResponse.json({ error: firstDateError.message }, { status: 500 });
@@ -287,7 +367,7 @@ export async function POST(req: Request) {
         end_time,
         duration_minutes,
         first_date,
-        last_date: last_date || null,
+        last_date: null,
         recurrence_interval_days,
         active: true,
       })
