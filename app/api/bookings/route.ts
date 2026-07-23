@@ -176,7 +176,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    let resolvedUserId: string | null = user_id || null;
+    const resolvedUserId: string | null = user_id || null;
     let resolvedClientId: string | null = client_id || null;
     let resolvedGuestName: string | null = null;
     let resolvedGuestPhone: string | null = null;
