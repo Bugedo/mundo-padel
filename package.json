@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "jest",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -22,33 +25,33 @@
   },
   "homepage": "https://github.com/CaimanBrujo/template-next.js#readme",
   "dependencies": {
-    "@supabase/ssr": "^0.6.1",
+    "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "dotenv": "^17.2.3",
-    "framer-motion": "^12.23.9",
-    "lucide-react": "^0.525.0",
-    "next": "^15.3.5",
-    "node-fetch": "^3.3.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^1.26.0",
+    "next": "^16.2.11",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.11",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.0.13",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "eslint-config-next": "15.3.5",
-    "eslint-config-prettier": "^10.1.5",
-    "jest": "^30.0.4",
-    "jest-environment-jsdom": "^30.0.4",
-    "prettier": "^3.6.2",
-    "tailwindcss": "^4.1.11",
-    "ts-jest": "^29.4.0",
-    "typescript": "^5.8.3"
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "ts-jest": "^29.4.12",
+    "typescript": "~5.9"
   }
 }

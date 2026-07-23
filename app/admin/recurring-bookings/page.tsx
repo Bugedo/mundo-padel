@@ -129,6 +129,27 @@ export default function RecurringBookingsPage() {
 
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
+  const fetchRecurringBookings = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/recurring-bookings', { cache: 'no-store' });
+      const data = await res.json();
+
+      if (res.ok) {
+        setRecurringBookings(data);
+      } else {
+        setError(data.error || 'Error al cargar reservas recurrentes');
+      }
+    } catch (err: unknown) {
+      console.error('Error fetching recurring bookings:', err);
+      setError('Error de red al cargar reservas recurrentes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchRecurringBookings();
   }, []);
@@ -191,27 +212,6 @@ export default function RecurringBookingsPage() {
 
     return () => clearTimeout(t);
   }, [editClientSearchTerm, editSelectedClient]);
-
-  const fetchRecurringBookings = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/recurring-bookings', { cache: 'no-store' });
-      const data = await res.json();
-
-      if (res.ok) {
-        setRecurringBookings(data);
-      } else {
-        setError(data.error || 'Error al cargar reservas recurrentes');
-      }
-    } catch (err: unknown) {
-      console.error('Error fetching recurring bookings:', err);
-      setError('Error de red al cargar reservas recurrentes');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const resetCreateForm = () => {
     setSelectedClient(null);

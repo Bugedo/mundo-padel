@@ -31,14 +31,14 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (user) {
       // Try to fetch profile
-      let { data: profile, error } = await supabase
+      let { data: profile } = await supabase
         .from('profiles')
         .select('id, email, role, full_name')
         .eq('id', user.id)
         .single();
 
       // If profile doesn't exist → create it
-      if (!profile && !error) {
+      if (!profile) {
         const { error: insertError } = await supabase.from('profiles').insert({
           id: user.id,
           email: user.email ?? '', // fallback
