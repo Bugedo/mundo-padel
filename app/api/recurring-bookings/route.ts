@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
-// import { getBuenosAiresDate, getDayOfWeekBuenosAires, formatDateForAPI } from '@/lib/timezoneUtils'; // Not used
+import { addDaysToDateOnly } from '@/lib/timezoneUtils';
 
 interface BookingToCreate {
-  user_id: string;
+  user_id: string | null;
+  client_id: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
   court: number;
   date: string;
   start_time: string;
@@ -15,7 +18,7 @@ interface BookingToCreate {
   cancelled: boolean;
   is_recurring: boolean;
   recurring_booking_id: string;
-  created_by: string;
+  created_by: string | null;
 }
 
 // Helper function to get day name (currently not used)
@@ -53,10 +56,7 @@ async function propagateRecurringBooking(
       return { success: false, error: recurringError };
     }
 
-    // Calculate date range
-    const startDateObj = new Date(startDate);
-    const endDateObj = new Date(startDateObj);
-    endDateObj.setDate(endDateObj.getDate() + daysAhead);
+    const endDate = addDaysToDateOnly(startDate, daysAhead);
 
     // Get existing bookings for this recurring booking in the date range
     const { data: existingBookings, error: existingError } = await supabaseAdmin
@@ -64,7 +64,7 @@ async function propagateRecurringBooking(
       .select('date')
       .eq('recurring_booking_id', recurringBookingId)
       .gte('date', startDate)
-      .lte('date', endDateObj.toISOString().split('T')[0]);
+      .lte('date', endDate);
 
     if (existingError) {
       console.error('Error fetching existing bookings for propagation:', existingError);
@@ -74,52 +74,44 @@ async function propagateRecurringBooking(
     const existingDates = new Set(existingBookings?.map((b) => b.date) || []);
     const bookingsToCreate: BookingToCreate[] = [];
 
-    // Generate bookings for each applicable date
-    // Include the first_date in the check as well
-    const currentDate = new Date(startDateObj);
+    // Generate bookings for each applicable date (calendar strings, no UTC)
+    let dateString = startDate;
 
-    while (currentDate <= endDateObj) {
-      const dateString = currentDate.toISOString().split('T')[0];
-
+    while (dateString <= endDate) {
       // Skip if booking already exists for this date
-      if (existingDates.has(dateString)) {
-        currentDate.setDate(currentDate.getDate() + 1);
-        continue;
+      if (!existingDates.has(dateString)) {
+        const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
+          'should_have_recurring_booking',
+          {
+            p_recurring_id: recurringBookingId,
+            p_check_date: dateString,
+          },
+        );
+
+        if (checkError) {
+          console.error(`Error checking recurring booking for ${dateString}:`, checkError);
+        } else if (shouldBeActive) {
+          bookingsToCreate.push({
+            user_id: recurring.user_id || null,
+            client_id: recurring.client_id || null,
+            guest_name: recurring.guest_name || null,
+            guest_phone: recurring.guest_phone || null,
+            court: recurring.court,
+            date: dateString,
+            start_time: recurring.start_time,
+            end_time: recurring.end_time,
+            duration_minutes: recurring.duration_minutes,
+            confirmed: true,
+            present: false,
+            cancelled: false,
+            is_recurring: true,
+            recurring_booking_id: recurringBookingId,
+            created_by: recurring.user_id || null,
+          });
+        }
       }
 
-      // Check if this date should have a recurring booking
-      const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
-        'should_have_recurring_booking',
-        {
-          p_recurring_id: recurringBookingId,
-          p_check_date: dateString,
-        },
-      );
-
-      if (checkError) {
-        console.error(`Error checking recurring booking for ${dateString}:`, checkError);
-        currentDate.setDate(currentDate.getDate() + 1);
-        continue;
-      }
-
-      if (shouldBeActive) {
-        bookingsToCreate.push({
-          user_id: recurring.user_id,
-          court: recurring.court,
-          date: dateString,
-          start_time: recurring.start_time,
-          end_time: recurring.end_time,
-          duration_minutes: recurring.duration_minutes,
-          confirmed: true,
-          present: false,
-          cancelled: false,
-          is_recurring: true,
-          recurring_booking_id: recurringBookingId,
-          created_by: recurring.user_id,
-        });
-      }
-
-      currentDate.setDate(currentDate.getDate() + 1);
+      dateString = addDaysToDateOnly(dateString, 1);
     }
 
     // Batch insert all bookings
@@ -154,13 +146,14 @@ export async function GET() {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all recurring bookings with user information
+    // Get all recurring bookings with profile + client info
     const { data, error } = await supabaseAdmin
       .from('recurring_bookings')
       .select(
         `
         *,
-        user:profiles!recurring_bookings_user_id_fkey(full_name, email)
+        user:profiles!recurring_bookings_user_id_fkey(full_name, email, phone),
+        client:clients!recurring_bookings_client_id_fkey(full_name, email, phone)
       `,
       )
       .order('created_at', { ascending: false });
@@ -181,13 +174,14 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { isAdmin, error: authError } = await validateAdminUser();
+    const { isAdmin, error: authError, user: adminUser } = await validateAdminUser();
     if (!isAdmin) {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
     }
     const body = await req.json();
     const {
       user_id,
+      client_id,
       court,
       start_time,
       end_time,
@@ -195,8 +189,9 @@ export async function POST(req: Request) {
       first_date,
       recurrence_interval_days = 7,
     } = body;
+
     if (
-      !user_id ||
+      (!user_id && !client_id) ||
       court === undefined ||
       !start_time ||
       !end_time ||
@@ -206,7 +201,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            'Missing required fields: user_id, court, start_time, end_time, duration_minutes, first_date',
+            'Missing required fields: client_id (or user_id), court, start_time, end_time, duration_minutes, first_date',
         },
         { status: 400 },
       );
@@ -221,62 +216,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'court must be between 1 and 3' }, { status: 400 });
     }
 
-    // Check if user exists
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('id', user_id)
-      .single();
-    if (userError || !user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    let resolvedUserId: string | null = user_id || null;
+    let resolvedClientId: string | null = client_id || null;
+    let guestName: string | null = null;
+    let guestPhone: string | null = null;
 
-    // First, let's see ALL recurring bookings for this court
-    const { data: allCourtRecurringBookings } = await supabaseAdmin
-      .from('recurring_bookings')
-      .select('*')
-      .eq('court', court)
-      .eq('active', true);
-
-    console.log('ALL recurring bookings for court', court, ':', allCourtRecurringBookings);
-
-    // Let's also check if this specific recurring booking has been propagated to regular bookings
-    if (allCourtRecurringBookings && allCourtRecurringBookings.length > 0) {
-      for (const recurring of allCourtRecurringBookings) {
-        const { data: propagatedBookings } = await supabaseAdmin
-          .from('bookings')
-          .select('*')
-          .eq('recurring_booking_id', recurring.id)
-          .eq('date', first_date)
-          .limit(5);
-
-        console.log(
-          `Propagated bookings for recurring ${recurring.id} (${recurring.start_time}-${recurring.end_time}) on ${first_date}:`,
-          propagatedBookings,
-        );
+    if (client_id) {
+      const { data: client, error: clientError } = await supabaseAdmin
+        .from('clients')
+        .select('*')
+        .eq('id', client_id)
+        .single();
+      if (clientError || !client) {
+        return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
       }
+      resolvedClientId = client.id;
+      guestName = client.full_name;
+      guestPhone = client.phone || 'sin-telefono';
+    } else if (user_id) {
+      const { data: user, error: userError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, phone')
+        .eq('id', user_id)
+        .single();
+      if (userError || !user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      guestName = user.full_name;
+      guestPhone = user.phone;
     }
 
-    // Let's also check all regular bookings for this court and date
-    const { data: allCourtBookings } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-      .eq('court', court)
-      .eq('date', first_date)
-      .neq('cancelled', true);
-
-    console.log(
-      'ALL regular bookings for court',
-      court,
-      'on date',
-      first_date,
-      ':',
-      allCourtBookings,
-    );
-
-    // Check for conflicts with existing recurring bookings
-    // Only check recurring bookings that would be active on the same day of the week
-    // We need to check if this recurring booking would be active on the first_date
     const { data: existingRecurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
@@ -288,21 +257,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: recurringError.message }, { status: 500 });
     }
 
-    // Filter recurring bookings to only those that would be active on the same day of the week
     const conflictingRecurringBookings: Array<{
       id: string;
       start_time: string;
       end_time: string;
-      court: number;
-      user_id: string;
-      first_date: string;
-      recurrence_interval_days: number;
-      active: boolean;
-      created_at: string;
     }> = [];
     if (existingRecurringBookings && existingRecurringBookings.length > 0) {
       for (const recurring of existingRecurringBookings) {
-        // Check if this recurring booking would be active on the first_date using the database function
         const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
           'should_have_recurring_booking',
           {
@@ -317,24 +278,7 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log('Checking for conflicts with recurring bookings:', {
-      newBooking: { start_time, end_time, court, first_date },
-      allRecurringBookings: existingRecurringBookings?.length || 0,
-      conflictingRecurringBookingsCount: conflictingRecurringBookings.length,
-      conflictingRecurringBookings,
-      queryConditions: {
-        court,
-        active: true,
-        timeCondition: `and(start_time.lt.${end_time},end_time.gt.${start_time})`,
-      },
-    });
-
-    if (conflictingRecurringBookings && conflictingRecurringBookings.length > 0) {
-      console.log('Conflict detected with recurring booking:', {
-        newBooking: { start_time, end_time, court, first_date },
-        existingBooking: conflictingRecurringBookings[0],
-        conflictReason: `New: ${start_time}-${end_time}, Existing: ${conflictingRecurringBookings[0].start_time}-${conflictingRecurringBookings[0].end_time}`,
-      });
+    if (conflictingRecurringBookings.length > 0) {
       return NextResponse.json(
         {
           error: `Time slot conflicts with existing recurring booking: ${conflictingRecurringBookings[0].start_time} - ${conflictingRecurringBookings[0].end_time}`,
@@ -343,9 +287,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check for conflicts with regular bookings only on the first_date
-    // Since regular bookings can only be made 6 days in advance, we only need to check the first_date
-    // Since all bookings are in 30-minute blocks, we can use exact time matching
     const { data: firstDateBookings, error: firstDateError } = await supabaseAdmin
       .from('bookings')
       .select('*')
@@ -367,11 +308,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create the recurring booking
     const { data, error: insertError } = await supabaseAdmin
       .from('recurring_bookings')
       .insert({
-        user_id,
+        user_id: resolvedUserId,
+        client_id: resolvedClientId,
+        guest_name: guestName,
+        guest_phone: guestPhone,
         court,
         start_time,
         end_time,
@@ -388,62 +331,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    // Create the first instance of the recurring booking
-    console.log(`Creating first recurring booking instance for ${first_date} at ${start_time}`);
-
     try {
-      const { data: bookingData, error: bookingError } = await supabaseAdmin
-        .from('bookings')
-        .insert({
-          user_id,
-          court,
-          date: first_date,
-          start_time,
-          end_time,
-          duration_minutes,
-          confirmed: true, // Recurring bookings are always confirmed
-          present: false,
-          cancelled: false,
-          is_recurring: true,
-          created_by: user_id,
-          recurring_booking_id: data.id,
-        })
-        .select()
-        .single();
+      const { error: bookingError } = await supabaseAdmin.from('bookings').insert({
+        user_id: resolvedUserId,
+        client_id: resolvedClientId,
+        guest_name: guestName,
+        guest_phone: guestPhone,
+        court,
+        date: first_date,
+        start_time,
+        end_time,
+        duration_minutes,
+        confirmed: true,
+        present: false,
+        cancelled: false,
+        is_recurring: true,
+        created_by: adminUser?.id || resolvedUserId,
+        recurring_booking_id: data.id,
+      });
 
       if (bookingError) {
-        console.error('Error creating first recurring booking instance:', bookingError);
         return NextResponse.json(
           { error: `Failed to create initial booking: ${bookingError.message}` },
           { status: 500 },
         );
-      } else {
-        console.log(`✅ Created first recurring booking instance:`, bookingData);
       }
-    } catch (error) {
-      console.error('Error in creating first recurring booking instance:', error);
-      return NextResponse.json(
-        { error: `Failed to create initial booking: ${error.message}` },
-        { status: 500 },
-      );
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      return NextResponse.json({ error: `Failed to create initial booking: ${msg}` }, { status: 500 });
     }
 
-    // Auto-propagate recurring booking for the next 15 days
     try {
-      console.log(`🚀 Starting auto-propagation for new recurring booking ${data.id}`);
-      const propagationResult = await propagateRecurringBooking(data.id, first_date, 15);
-
-      if (propagationResult.success) {
-        console.log(
-          `✅ Auto-propagation completed: ${propagationResult.bookingsCreated} bookings created`,
-        );
-      } else {
-        console.error('❌ Auto-propagation failed:', propagationResult.error);
-        // Don't fail the entire operation, just log the error
-      }
+      await propagateRecurringBooking(data.id, first_date, 15);
     } catch (error) {
       console.error('Error in auto-propagation:', error);
-      // Don't fail the entire operation, just log the error
     }
 
     return NextResponse.json({
@@ -474,11 +395,35 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Missing required fields: id, updates' }, { status: 400 });
     }
 
+    const safeUpdates = { ...updates };
+
+    if (safeUpdates.client_id) {
+      const { data: client, error: clientError } = await supabaseAdmin
+        .from('clients')
+        .select('*')
+        .eq('id', safeUpdates.client_id)
+        .single();
+
+      if (clientError || !client) {
+        return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
+      }
+
+      safeUpdates.guest_name = client.full_name;
+      safeUpdates.guest_phone = client.phone || 'sin-telefono';
+      safeUpdates.user_id = null;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('recurring_bookings')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', id)
-      .select()
+      .select(
+        `
+        *,
+        user:profiles!recurring_bookings_user_id_fkey(full_name, email, phone),
+        client:clients!recurring_bookings_client_id_fkey(full_name, email, phone)
+      `,
+      )
       .single();
 
     if (error) {

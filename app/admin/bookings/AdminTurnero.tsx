@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getBuenosAiresDate,
-  formatDateForAPIWithoutConversion,
-  isBookingExpiredBuenosAires,
+  formatDateOnly,
 } from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
-  user_id: string;
+  user_id?: string | null;
+  guest_name?: string | null;
+  guest_phone?: string | null;
   court: number | null;
   date: string;
   start_time: string;
@@ -19,7 +20,6 @@ interface Booking {
   present: boolean;
   cancelled: boolean;
   absent?: boolean;
-  expires_at?: string;
   is_recurring?: boolean;
   recurring_booking_id?: string;
   comment?: string;
@@ -28,6 +28,19 @@ interface Booking {
     email: string;
     phone?: string;
   };
+}
+
+function getBookingDisplayName(booking: Booking): string {
+  return booking.guest_name || booking.user?.full_name || 'Sin nombre';
+}
+
+function getBookingDisplayPhone(booking: Booking): string | undefined {
+  return booking.guest_phone || booking.user?.phone || undefined;
+}
+
+function phoneToWaMe(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return `https://wa.me/${digits}`;
 }
 
 interface AdminTurneroProps {
@@ -119,13 +132,12 @@ export default function AdminTurnero({
   preloadBookings,
 }: AdminTurneroProps) {
   const [showEarly, setShowEarly] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<{ [id: string]: number }>({});
   // Initialize currentWeekOffset to 0 (current week: today + 6 days ahead)
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
 
   // Obtener reservas de la fecha seleccionada desde el cache
   const bookings = getBookingsForDate(selectedDate);
-  const loading = loadingDates.has(formatDateForAPIWithoutConversion(selectedDate));
+  const loading = loadingDates.has(formatDateOnly(selectedDate));
 
   // Precargar reservas de la semana cuando cambie el offset (con delay para evitar sobrecarga)
   useEffect(() => {
@@ -145,12 +157,17 @@ export default function AdminTurnero({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<number | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [users, setUsers] = useState<{ id: string; full_name: string; email: string }[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<
-    { id: string; full_name: string; email: string }[]
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [clientSuggestions, setClientSuggestions] = useState<
+    { id: string; full_name: string; phone: string | null; email: string | null }[]
   >([]);
+  const [selectedClient, setSelectedClient] = useState<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+  } | null>(null);
+  const [searchingClients, setSearchingClients] = useState(false);
 
   // Recurring booking state
   const [isRecurring, setIsRecurring] = useState(false);
@@ -161,55 +178,33 @@ export default function AdminTurnero({
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
 
-  // Ya no necesitamos fetchBookings - usamos el cache
-
-  // Fetch users for booking creation
-  const fetchUsers = useCallback(async () => {
-    const res = await fetch('/api/users?showAll=true', { cache: 'no-store' });
-    const data = await res.json();
-
-    if (res.ok && Array.isArray(data)) {
-      console.log('Users loaded:', data.length);
-      setUsers(data);
-      setFilteredUsers(data);
-    } else {
-      console.error('Error fetching users:', data);
+  useEffect(() => {
+    if (clientSearchTerm.trim().length < 2 || selectedClient) {
+      setClientSuggestions([]);
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  // Filter users by search term
-  useEffect(() => {
-    const filtered = users.filter(
-      (user) =>
-        user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(userSearchTerm.toLowerCase()),
-    );
-    console.log('Filtered users:', filtered.length, 'for term:', userSearchTerm);
-    setFilteredUsers(filtered);
-  }, [userSearchTerm, users]);
-
-  // Timer que actualiza cada segundo para reservas pendientes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = getBuenosAiresDate().getTime();
-      const updated: { [id: string]: number } = {};
-
-      bookings.forEach((b) => {
-        if (b.expires_at && !b.confirmed) {
-          const diff = Math.max(0, Math.floor((new Date(b.expires_at).getTime() - now) / 1000));
-          updated[b.id] = diff;
+    const t = setTimeout(async () => {
+      setSearchingClients(true);
+      try {
+        const res = await fetch(`/api/clients?q=${encodeURIComponent(clientSearchTerm.trim())}`, {
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          setClientSuggestions(data);
+        } else {
+          setClientSuggestions([]);
         }
-      });
+      } catch {
+        setClientSuggestions([]);
+      } finally {
+        setSearchingClients(false);
+      }
+    }, 250);
 
-      setTimeLeft(updated);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [bookings]);
+    return () => clearTimeout(t);
+  }, [clientSearchTerm, selectedClient]);
 
   const changeWeek = (offset: number) => {
     const newOffset = currentWeekOffset + offset;
@@ -319,7 +314,7 @@ export default function AdminTurnero({
   const handleEditBooking = (booking: Booking) => {
     // For now, just show an alert. In the future, this could open an edit modal
     alert(
-      `Editar reserva de ${booking.user?.full_name || 'usuario'} - ${booking.start_time} a ${booking.end_time}`,
+      `Editar reserva de ${getBookingDisplayName(booking)} - ${booking.start_time} a ${booking.end_time}`,
     );
   };
 
@@ -376,9 +371,7 @@ export default function AdminTurnero({
         const [bh, bm] = b.start_time.split(':').map(Number);
         const bStart = bh * 60 + bm;
         const bEnd = bStart + (b.duration_minutes || 90);
-        const active =
-          (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
-          !b.cancelled;
+        const active = !b.cancelled;
         return active && minute >= bStart && minute < bEnd;
       });
 
@@ -413,10 +406,9 @@ export default function AdminTurnero({
 
   // Create booking
   const createBooking = async () => {
-    if (!selectedSlot || !selectedUser) return;
-    // Note: We don't need to check canFitDuration here since we already validated when selecting the slot
+    if (!selectedSlot || !selectedClient) return;
 
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
+    const dateString = formatDateOnly(selectedDate);
 
     const [h, m] = selectedSlot.split(':').map(Number);
     const startMinutes = h * 60 + m;
@@ -426,71 +418,60 @@ export default function AdminTurnero({
 
     const start_time = selectedSlot;
     const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+    const courtToUse = selectedCourt || 1;
 
-    // Use the selected court
-    const courtToUse = selectedCourt || 1; // Fallback to court 1 if somehow not set
+    const resetCreateForm = () => {
+      setShowCreateForm(false);
+      setSelectedClient(null);
+      setClientSearchTerm('');
+      setClientSuggestions([]);
+      setSelectedSlot(null);
+      setSelectedCourt(null);
+      setIsRecurring(false);
+    };
 
     if (isRecurring) {
-      // Create recurring booking
       const response = await fetch('/api/recurring-bookings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: selectedUser,
+          client_id: selectedClient.id,
           court: courtToUse,
           start_time,
           end_time,
           duration_minutes: duration,
           first_date: dateString,
-          recurrence_interval_days: 7, // Always weekly
+          recurrence_interval_days: 7,
         }),
       });
 
       if (response.ok) {
-        // Recargar las reservas de la fecha actual para actualizar el cache
         await reloadBookingsForDate(selectedDate);
-
         alert('Reserva recurrente creada exitosamente');
-        setShowCreateForm(false);
-        setSelectedUser('');
-        setUserSearchTerm('');
-        setSelectedSlot(null);
-        setSelectedCourt(null);
-        setIsRecurring(false);
+        resetCreateForm();
       } else {
         const errorData = await response.json();
         alert(`Error al crear la reserva recurrente: ${errorData.error}`);
       }
     } else {
-      // Create regular booking
       const response = await fetch('/api/bookings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: selectedUser,
+          client_id: selectedClient.id,
           date: dateString,
           start_time,
           end_time,
           duration_minutes: duration,
-          court: courtToUse, // Specify the court for admin bookings
-          confirmed: true, // Admin creates confirmed bookings
+          court: courtToUse,
+          confirmed: true,
         }),
       });
 
       if (response.ok) {
-        // Recargar las reservas de la fecha actual para actualizar el cache
         await reloadBookingsForDate(selectedDate);
-
         alert('Reserva creada exitosamente');
-        setShowCreateForm(false);
-        setSelectedUser('');
-        setUserSearchTerm('');
-        setSelectedSlot(null);
-        setSelectedCourt(null);
+        resetCreateForm();
       } else {
         const errorData = await response.json();
         alert(`Error al crear la reserva: ${errorData.error}`);
@@ -522,7 +503,7 @@ export default function AdminTurnero({
           {/* Week Days Selector */}
           <div className="flex gap-1">
             {getWeekDates(currentWeekOffset).map((date, index) => {
-              const dateString = formatDateForAPIWithoutConversion(date);
+              const dateString = formatDateOnly(date);
               const isLoading = loadingDates.has(dateString);
 
               return (
@@ -674,10 +655,7 @@ export default function AdminTurnero({
                   const durationInSlots = Math.ceil(booking.duration_minutes / 30);
                   const topPosition = slotIndex * 72; // 64px height + 8px margin
                   const height = durationInSlots * 64 + (durationInSlots - 1) * 8;
-
-                  const remaining = timeLeft[booking.id] || 0;
-                  const minutes = Math.floor(remaining / 60);
-                  const seconds = remaining % 60;
+                  const displayPhone = getBookingDisplayPhone(booking);
 
                   return (
                     <div
@@ -690,24 +668,19 @@ export default function AdminTurnero({
                         zIndex: 10,
                       }}
                     >
-                      {/* Timer positioned at top-right */}
-                      {!booking.confirmed && booking.expires_at && (
-                        <div className="absolute top-2 right-2 text-xs font-bold">
-                          {remaining > 0 ? (
-                            <span className={remaining < 60 ? 'text-red-200' : ''}>
-                              ⏰ {minutes}:{seconds.toString().padStart(2, '0')}
-                            </span>
-                          ) : (
-                            <span className="text-red-200">⏰ Expirada</span>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="space-y-1 pr-8">
+                      <div className="space-y-1">
                         <div className="font-bold text-sm truncate">
-                          {booking.user?.full_name || 'Usuario desconocido'}
-                          {booking.user?.phone && (
-                            <span className="font-normal opacity-90"> ({booking.user.phone})</span>
+                          {getBookingDisplayName(booking)}
+                          {displayPhone && (
+                            <a
+                              href={phoneToWaMe(displayPhone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-normal opacity-90 underline ml-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              ({displayPhone})
+                            </a>
                           )}
                         </div>
                         <div className="text-xs opacity-90">
@@ -873,14 +846,21 @@ export default function AdminTurnero({
                   >
                     <div className="flex-1">
                       <div className="font-medium text-neutral">
-                        {booking.user?.full_name || 'Usuario desconocido'}
+                        {getBookingDisplayName(booking)}
                       </div>
                       <div className="text-sm text-neutral-muted">
                         Cancha {booking.court} • {booking.start_time} - {booking.end_time} (
                         {booking.duration_minutes} min)
                       </div>
-                      {booking.user?.phone && (
-                        <div className="text-sm text-neutral-muted">{booking.user.phone}</div>
+                      {getBookingDisplayPhone(booking) && (
+                        <a
+                          href={phoneToWaMe(getBookingDisplayPhone(booking)!)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-accent hover:underline"
+                        >
+                          {getBookingDisplayPhone(booking)}
+                        </a>
                       )}
                     </div>
                     <div className="flex gap-2">
@@ -917,31 +897,69 @@ export default function AdminTurnero({
                 <p className="text-sm">Duración: {duration} minutos</p>
               </div>
 
-              {/* User selection */}
+              {/* Client selection */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o email..."
-                  value={userSearchTerm}
-                  onChange={(e) => setUserSearchTerm(e.target.value)}
-                  className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
-                />
-                {userSearchTerm && (
-                  <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
-                    {filteredUsers.map((user) => (
-                      <div
-                        key={user.id}
-                        onClick={() => {
-                          setSelectedUser(user.id);
-                          setUserSearchTerm(user.full_name || user.email);
-                        }}
-                        className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
-                      >
-                        {user.full_name} ({user.email})
-                      </div>
-                    ))}
+                <label className="block text-sm font-medium mb-2 text-neutral">Cliente</label>
+                {selectedClient ? (
+                  <div className="flex items-center justify-between gap-2 border border-accent rounded px-3 py-2 bg-accent/10 text-neutral">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{selectedClient.full_name}</p>
+                      <p className="text-xs opacity-80 truncate">
+                        {selectedClient.phone || 'Sin teléfono'}
+                        {selectedClient.email ? ` · ${selectedClient.email}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(null);
+                        setClientSearchTerm('');
+                      }}
+                      className="text-xs shrink-0 underline"
+                    >
+                      Cambiar
+                    </button>
                   </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Buscar nombre, email o teléfono (2+ caracteres)…"
+                      value={clientSearchTerm}
+                      onChange={(e) => setClientSearchTerm(e.target.value)}
+                      className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                      autoComplete="off"
+                    />
+                    {clientSearchTerm.trim().length >= 2 && (
+                      <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
+                        {searchingClients && (
+                          <div className="px-3 py-2 text-sm text-neutral-muted">Buscando…</div>
+                        )}
+                        {!searchingClients && clientSuggestions.length === 0 && (
+                          <div className="px-3 py-2 text-sm text-neutral-muted">
+                            Sin resultados. Creá el cliente en Clientes.
+                          </div>
+                        )}
+                        {clientSuggestions.map((client) => (
+                          <div
+                            key={client.id}
+                            onClick={() => {
+                              setSelectedClient(client);
+                              setClientSearchTerm(client.full_name);
+                              setClientSuggestions([]);
+                            }}
+                            className="px-3 py-2 text-neutral hover:bg-accent hover:text-dark cursor-pointer border-b border-muted last:border-b-0"
+                          >
+                            <div className="font-medium">{client.full_name}</div>
+                            <div className="text-xs opacity-80">
+                              {client.phone || 'Sin teléfono'}
+                              {client.email ? ` · ${client.email}` : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -966,8 +984,9 @@ export default function AdminTurnero({
                     setShowCreateForm(false);
                     setSelectedSlot(null);
                     setSelectedCourt(null);
-                    setSelectedUser('');
-                    setUserSearchTerm('');
+                    setSelectedClient(null);
+                    setClientSearchTerm('');
+                    setClientSuggestions([]);
                     setIsRecurring(false);
                   }}
                   className="flex-1 bg-muted text-neutral px-4 py-2 rounded hover:bg-muted-light transition-colors"
@@ -976,7 +995,7 @@ export default function AdminTurnero({
                 </button>
                 <button
                   onClick={createBooking}
-                  disabled={!selectedUser}
+                  disabled={!selectedClient}
                   className="flex-1 bg-accent text-dark px-4 py-2 rounded hover:bg-accent-hover disabled:bg-muted disabled:text-neutral-muted transition-colors"
                 >
                   {isRecurring ? 'Crear Reserva Recurrente' : 'Crear Reserva'}

@@ -2,11 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { formatTimeForDisplay } from '@/lib/timeFormatUtils';
-import { getDayOfWeekBuenosAires, getDayNameBuenosAires } from '@/lib/timezoneUtils';
+import { getDayOfWeekBuenosAires, getDayNameBuenosAires, formatDateDisplay } from '@/lib/timezoneUtils';
+
+interface ClientOption {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+}
 
 interface RecurringBooking {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  client_id: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
   court: number;
   start_time: string;
   end_time: string;
@@ -19,13 +29,13 @@ interface RecurringBooking {
   user?: {
     full_name: string;
     email: string;
-  };
-}
-
-interface User {
-  id: string;
-  full_name: string;
-  email: string;
+    phone?: string | null;
+  } | null;
+  client?: {
+    full_name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
 }
 
 const allSlots = [
@@ -65,26 +75,31 @@ const allSlots = [
 
 const defaultSlots = allSlots.filter((slot) => slot.start >= '16:30');
 
-// const daysOfWeek = [
-//   { value: 0, label: 'Domingo' },
-//   { value: 1, label: 'Lunes' },
-//   { value: 2, label: 'Martes' },
-//   { value: 3, label: 'Miércoles' },
-//   { value: 4, label: 'Jueves' },
-//   { value: 5, label: 'Viernes' },
-//   { value: 6, label: 'Sábado' },
-// ];
+function bookingDisplayName(booking: RecurringBooking) {
+  return booking.guest_name || booking.client?.full_name || booking.user?.full_name || 'Sin cliente';
+}
+
+function bookingDisplayContact(booking: RecurringBooking) {
+  return (
+    booking.guest_phone ||
+    booking.client?.phone ||
+    booking.client?.email ||
+    booking.user?.email ||
+    ''
+  );
+}
 
 export default function RecurringBookingsPage() {
   const [recurringBookings, setRecurringBookings] = useState<RecurringBooking[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state for creating new recurring booking
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [selectedUserInfo, setSelectedUserInfo] = useState<User | null>(null);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [clientSuggestions, setClientSuggestions] = useState<ClientOption[]>([]);
+  const [selectedClient, setSelectedClient] = useState<ClientOption | null>(null);
+  const [searchingClients, setSearchingClients] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedDuration, setSelectedDuration] = useState<60 | 90 | 120>(90);
   const [selectedCourt, setSelectedCourt] = useState<1 | 2 | 3>(1);
@@ -92,14 +107,11 @@ export default function RecurringBookingsPage() {
   const [lastDate, setLastDate] = useState<string>('');
   const [recurrenceInterval, setRecurrenceInterval] = useState<number>(7);
   const [showEarlySlots, setShowEarlySlots] = useState(false);
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   // Edit form state
   const [editingBooking, setEditingBooking] = useState<RecurringBooking | null>(null);
   const [editForm, setEditForm] = useState({
-    user_id: '',
+    client_id: '' as string,
     court: 1 as 1 | 2 | 3,
     start_time: '',
     end_time: '',
@@ -109,84 +121,76 @@ export default function RecurringBookingsPage() {
     recurrence_interval_days: 7,
     active: true,
   });
-  const [editUserSearchTerm, setEditUserSearchTerm] = useState('');
-  const [editFilteredUsers, setEditFilteredUsers] = useState<User[]>([]);
-  const [showEditUserDropdown, setShowEditUserDropdown] = useState(false);
-  const [editSelectedUserInfo, setEditSelectedUserInfo] = useState<User | null>(null);
+  const [editClientSearchTerm, setEditClientSearchTerm] = useState('');
+  const [editClientSuggestions, setEditClientSuggestions] = useState<ClientOption[]>([]);
+  const [editSelectedClient, setEditSelectedClient] = useState<ClientOption | null>(null);
+  const [editSearchingClients, setEditSearchingClients] = useState(false);
   const [showEditEarlySlots, setShowEditEarlySlots] = useState(false);
 
   const slots = showEarlySlots ? allSlots : defaultSlots;
 
-  // Fetch recurring bookings and users on component mount
   useEffect(() => {
     fetchRecurringBookings();
-    fetchUsers();
   }, []);
 
-  // Filter users by search term
+  // Create form: predictive client search (2+ chars)
   useEffect(() => {
-    console.log('Filtering users:', {
-      totalUsers: users.length,
-      searchTerm: userSearchTerm,
-      searchTermLength: userSearchTerm.length,
-    });
-
-    if (!userSearchTerm.trim()) {
-      setFilteredUsers(users);
+    if (clientSearchTerm.trim().length < 2 || selectedClient) {
+      setClientSuggestions([]);
       return;
     }
 
-    const filtered = users.filter((user) => {
-      const nameMatch = user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase());
-      const emailMatch = user.email.toLowerCase().includes(userSearchTerm.toLowerCase());
-
-      if (nameMatch || emailMatch) {
-        console.log('User matches search:', {
-          id: user.id,
-          name: user.full_name,
-          email: user.email,
-          nameMatch,
-          emailMatch,
+    const t = setTimeout(async () => {
+      setSearchingClients(true);
+      try {
+        const res = await fetch(`/api/clients?q=${encodeURIComponent(clientSearchTerm.trim())}`, {
+          cache: 'no-store',
         });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          setClientSuggestions(data);
+        } else {
+          setClientSuggestions([]);
+        }
+      } catch {
+        setClientSuggestions([]);
+      } finally {
+        setSearchingClients(false);
       }
+    }, 250);
 
-      return nameMatch || emailMatch;
-    });
+    return () => clearTimeout(t);
+  }, [clientSearchTerm, selectedClient]);
 
-    console.log('Filtered users result:', filtered.length, 'users found');
-    setFilteredUsers(filtered);
-  }, [userSearchTerm, users]);
-
-  // Filter users for edit form
+  // Edit form: predictive client search (2+ chars)
   useEffect(() => {
-    if (!editUserSearchTerm.trim()) {
-      setEditFilteredUsers(users);
+    if (editClientSearchTerm.trim().length < 2 || editSelectedClient) {
+      setEditClientSuggestions([]);
       return;
     }
 
-    const filtered = users.filter((user) => {
-      const nameMatch = user.full_name?.toLowerCase().includes(editUserSearchTerm.toLowerCase());
-      const emailMatch = user.email.toLowerCase().includes(editUserSearchTerm.toLowerCase());
-      return nameMatch || emailMatch;
-    });
-
-    setEditFilteredUsers(filtered);
-  }, [editUserSearchTerm, users]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('.user-dropdown-container')) {
-        setShowUserDropdown(false);
+    const t = setTimeout(async () => {
+      setEditSearchingClients(true);
+      try {
+        const res = await fetch(
+          `/api/clients?q=${encodeURIComponent(editClientSearchTerm.trim())}`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          setEditClientSuggestions(data);
+        } else {
+          setEditClientSuggestions([]);
+        }
+      } catch {
+        setEditClientSuggestions([]);
+      } finally {
+        setEditSearchingClients(false);
       }
-    };
+    }, 250);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    return () => clearTimeout(t);
+  }, [editClientSearchTerm, editSelectedClient]);
 
   const fetchRecurringBookings = async () => {
     setLoading(true);
@@ -201,46 +205,29 @@ export default function RecurringBookingsPage() {
       } else {
         setError(data.error || 'Error al cargar reservas recurrentes');
       }
-    } catch (error: unknown) {
-      console.error('Error fetching recurring bookings:', error);
+    } catch (err: unknown) {
+      console.error('Error fetching recurring bookings:', err);
       setError('Error de red al cargar reservas recurrentes');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      console.log('Fetching users with showAll=true...');
-      const res = await fetch('/api/users?showAll=true', { cache: 'no-store' });
-      const data = await res.json();
-
-      console.log('API Response:', {
-        status: res.status,
-        ok: res.ok,
-        data: data,
-        isArray: Array.isArray(data),
-        length: Array.isArray(data) ? data.length : 'N/A',
-      });
-
-      if (res.ok && Array.isArray(data)) {
-        console.log('Users fetched successfully:', data.length, 'users');
-        console.log('First few users:', data.slice(0, 3));
-        setUsers(data);
-        setFilteredUsers(data);
-      } else {
-        console.error('Error fetching users:', data.error);
-        setError('Error al cargar usuarios: ' + (data.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Network error fetching users:', error);
-      setError('Error de red al cargar usuarios');
-    }
+  const resetCreateForm = () => {
+    setSelectedClient(null);
+    setClientSearchTerm('');
+    setClientSuggestions([]);
+    setSelectedTime('');
+    setSelectedCourt(1);
+    setSelectedDuration(90);
+    setFirstDate('');
+    setLastDate('');
+    setRecurrenceInterval(7);
   };
 
   const createRecurringBooking = async () => {
-    if (!selectedUser || !selectedTime || !firstDate) {
-      alert('Por favor selecciona un usuario, horario y fecha de inicio');
+    if (!selectedClient || !selectedTime || !firstDate) {
+      alert('Por favor selecciona un cliente, horario y fecha de inicio');
       return;
     }
 
@@ -257,13 +244,13 @@ export default function RecurringBookingsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: selectedUser,
+          client_id: selectedClient.id,
           court: selectedCourt,
           start_time: selectedTime,
           end_time,
           duration_minutes: selectedDuration,
           first_date: firstDate,
-          last_date: lastDate || null, // null means forever
+          last_date: lastDate || null,
           recurrence_interval_days: recurrenceInterval,
         }),
       });
@@ -272,19 +259,13 @@ export default function RecurringBookingsPage() {
         alert('Reserva recurrente creada exitosamente');
         await fetchRecurringBookings();
         setShowCreateForm(false);
-        setSelectedUser('');
-        setSelectedTime('');
-        setSelectedCourt(1);
-        setSelectedDuration(90);
-        setFirstDate('');
-        setLastDate('');
-        setRecurrenceInterval(7);
+        resetCreateForm();
       } else {
         const data = await res.json();
         alert(`Error al crear reserva recurrente: ${data.error}`);
       }
-    } catch (error: unknown) {
-      console.error('Error creating recurring booking:', error);
+    } catch (err: unknown) {
+      console.error('Error creating recurring booking:', err);
       alert('Error de red al crear reserva recurrente');
     }
   };
@@ -309,8 +290,8 @@ export default function RecurringBookingsPage() {
         const data = await res.json();
         alert(`Error al actualizar reserva recurrente: ${data.error}`);
       }
-    } catch (error: unknown) {
-      console.error('Error updating recurring booking:', error);
+    } catch (err: unknown) {
+      console.error('Error updating recurring booking:', err);
     }
   };
 
@@ -331,15 +312,15 @@ export default function RecurringBookingsPage() {
         const data = await res.json();
         alert(`Error al eliminar reserva recurrente: ${data.error}`);
       }
-    } catch (error: unknown) {
-      console.error('Error deleting recurring booking:', error);
+    } catch (err: unknown) {
+      console.error('Error deleting recurring booking:', err);
     }
   };
 
   const startEditBooking = (booking: RecurringBooking) => {
     setEditingBooking(booking);
     setEditForm({
-      user_id: booking.user_id,
+      client_id: booking.client_id || '',
       court: booking.court as 1 | 2 | 3,
       start_time: booking.start_time,
       end_time: booking.end_time,
@@ -350,35 +331,31 @@ export default function RecurringBookingsPage() {
       active: booking.active,
     });
 
-    // Set the user info for the edit form
-    const user = users.find((u) => u.id === booking.user_id);
-    if (user) {
-      setEditSelectedUserInfo(user);
-      setEditUserSearchTerm(user.full_name || user.email);
+    if (booking.client_id && (booking.client || booking.guest_name)) {
+      const clientInfo: ClientOption = {
+        id: booking.client_id,
+        full_name: booking.client?.full_name || booking.guest_name || 'Cliente',
+        phone: booking.client?.phone || booking.guest_phone || null,
+        email: booking.client?.email || null,
+      };
+      setEditSelectedClient(clientInfo);
+      setEditClientSearchTerm(clientInfo.full_name);
+    } else if (booking.guest_name) {
+      setEditSelectedClient(null);
+      setEditClientSearchTerm('');
+    } else {
+      setEditSelectedClient(null);
+      setEditClientSearchTerm('');
     }
 
     setShowEditEarlySlots(booking.start_time < '16:30');
-
-    // Debug logging
-    console.log('Edit form populated:', {
-      bookingId: booking.id.substring(0, 8),
-      user: booking.user?.full_name || booking.user?.email,
-      court: booking.court,
-      startTime: booking.start_time,
-      duration: booking.duration_minutes,
-      firstDate: booking.first_date,
-      lastDate: booking.last_date,
-      interval: booking.recurrence_interval_days,
-      active: booking.active,
-      showEarlySlots: booking.start_time < '16:30',
-    });
-    setShowEditUserDropdown(false); // Hide dropdown since user is already selected
+    setEditClientSuggestions([]);
   };
 
   const cancelEdit = () => {
     setEditingBooking(null);
     setEditForm({
-      user_id: '',
+      client_id: '',
       court: 1,
       start_time: '',
       end_time: '',
@@ -388,22 +365,27 @@ export default function RecurringBookingsPage() {
       recurrence_interval_days: 7,
       active: true,
     });
-    setEditUserSearchTerm('');
-    setEditSelectedUserInfo(null);
-    setShowEditUserDropdown(false);
+    setEditClientSearchTerm('');
+    setEditSelectedClient(null);
+    setEditClientSuggestions([]);
     setShowEditEarlySlots(false);
   };
 
   const saveEdit = async () => {
     if (!editingBooking) return;
+    if (!editSelectedClient && !editForm.client_id) {
+      alert('Por favor selecciona un cliente');
+      return;
+    }
 
-    // Calculate end_time from start_time and duration
     const [h, m] = editForm.start_time.split(':').map(Number);
     const startMinutes = h * 60 + m;
     const endMinutes = startMinutes + editForm.duration_minutes;
     const endH = Math.floor(endMinutes / 60) % 24;
     const endM = endMinutes % 60;
     const calculatedEndTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+
+    const clientId = editSelectedClient?.id || editForm.client_id;
 
     try {
       const res = await fetch('/api/recurring-bookings', {
@@ -412,7 +394,7 @@ export default function RecurringBookingsPage() {
         body: JSON.stringify({
           id: editingBooking.id,
           updates: {
-            user_id: editForm.user_id,
+            client_id: clientId,
             court: editForm.court,
             start_time: editForm.start_time,
             end_time: calculatedEndTime,
@@ -433,8 +415,8 @@ export default function RecurringBookingsPage() {
         const data = await res.json();
         alert(`Error al actualizar reserva recurrente: ${data.error}`);
       }
-    } catch (error: unknown) {
-      console.error('Error updating recurring booking:', error);
+    } catch (err: unknown) {
+      console.error('Error updating recurring booking:', err);
       alert('Error de red al actualizar reserva recurrente');
     }
   };
@@ -462,87 +444,88 @@ export default function RecurringBookingsPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Reservas Recurrentes</h1>
 
-      {/* Create button */}
       <div className="mb-6">
         <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
+          onClick={() => {
+            if (showCreateForm) resetCreateForm();
+            setShowCreateForm(!showCreateForm);
+          }}
           className="bg-success text-light px-4 py-2 rounded hover:bg-success-light transition-colors"
         >
           {showCreateForm ? 'Cancelar' : 'Crear Reserva Recurrente'}
         </button>
       </div>
 
-      {/* Create form */}
       {showCreateForm && (
         <div className="bg-surface p-6 rounded border border-muted mb-6">
           <h3 className="text-lg font-semibold mb-4 text-neutral">Crear Reserva Recurrente</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* User selection */}
-            <div className="user-dropdown-container">
-              <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
-              {selectedUserInfo ? (
-                <div className="border border-muted rounded px-3 py-2 bg-surface">
-                  <p className="font-medium text-neutral">{selectedUserInfo.full_name}</p>
-                  <p className="text-sm text-neutral">{selectedUserInfo.email}</p>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-neutral">Cliente</label>
+              {selectedClient ? (
+                <div className="flex items-center justify-between gap-2 border border-accent rounded px-3 py-2 bg-accent/10 text-neutral">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{selectedClient.full_name}</p>
+                    <p className="text-xs opacity-80 truncate">
+                      {selectedClient.phone || 'Sin teléfono'}
+                      {selectedClient.email ? ` · ${selectedClient.email}` : ''}
+                    </p>
+                  </div>
                   <button
+                    type="button"
                     onClick={() => {
-                      setSelectedUser('');
-                      setSelectedUserInfo(null);
-                      setUserSearchTerm('');
+                      setSelectedClient(null);
+                      setClientSearchTerm('');
                     }}
-                    className="text-sm text-error hover:underline mt-1"
+                    className="text-xs shrink-0 underline"
                   >
-                    Cambiar usuario
+                    Cambiar
                   </button>
                 </div>
               ) : (
                 <>
                   <input
                     type="text"
-                    placeholder="Buscar por nombre o email..."
-                    value={userSearchTerm}
-                    onChange={(e) => {
-                      setUserSearchTerm(e.target.value);
-                      setShowUserDropdown(true);
-                    }}
-                    onFocus={() => setShowUserDropdown(true)}
+                    placeholder="Buscar nombre, email o teléfono (2+ caracteres)…"
+                    value={clientSearchTerm}
+                    onChange={(e) => setClientSearchTerm(e.target.value)}
                     className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                    autoComplete="off"
                   />
-                  {showUserDropdown && userSearchTerm && (
+                  {clientSearchTerm.trim().length >= 2 && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
-                      {filteredUsers.length === 0 ? (
-                        <div className="px-3 py-2 text-neutral-muted">
-                          No se encontraron usuarios. Total cargados: {users.length}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="px-3 py-2 text-xs text-neutral-muted border-b border-muted">
-                            {filteredUsers.length} usuarios encontrados
-                          </div>
-                          {filteredUsers.map((user) => (
-                            <div
-                              key={user.id}
-                              onClick={() => {
-                                setSelectedUser(user.id);
-                                setSelectedUserInfo(user);
-                                setUserSearchTerm(user.full_name || user.email);
-                                setShowUserDropdown(false);
-                              }}
-                              className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
-                            >
-                              {user.full_name || 'Sin nombre'} ({user.email})
-                            </div>
-                          ))}
-                        </>
+                      {searchingClients && (
+                        <div className="px-3 py-2 text-sm text-neutral-muted">Buscando…</div>
                       )}
+                      {!searchingClients && clientSuggestions.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-neutral-muted">
+                          Sin resultados. Creá el cliente en Clientes.
+                        </div>
+                      )}
+                      {clientSuggestions.map((client) => (
+                        <div
+                          key={client.id}
+                          onClick={() => {
+                            setSelectedClient(client);
+                            setClientSearchTerm(client.full_name);
+                            setClientSuggestions([]);
+                          }}
+                          className="px-3 py-2 text-neutral hover:bg-accent hover:text-dark cursor-pointer border-b border-muted last:border-b-0"
+                        >
+                          <div className="font-medium">{client.full_name}</div>
+                          <div className="text-xs opacity-80">
+                            {client.phone || 'Sin teléfono'}
+                            {client.email ? ` · ${client.email}` : ''}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </>
               )}
             </div>
 
-            {/* Date range */}
             <div>
               <label className="block text-sm font-medium mb-2 text-neutral">Fecha de inicio</label>
               <input
@@ -554,12 +537,11 @@ export default function RecurringBookingsPage() {
               {firstDate && (
                 <p className="text-sm text-neutral mt-1">
                   Día de la semana:{' '}
-                  {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(firstDate)))}
+                  {getDayNameBuenosAires(getDayOfWeekBuenosAires(firstDate))}
                 </p>
               )}
             </div>
 
-            {/* Time selection */}
             <div>
               <label className="block text-sm font-medium mb-2 text-neutral">Horario</label>
               <div className="mb-2">
@@ -584,7 +566,6 @@ export default function RecurringBookingsPage() {
               </select>
             </div>
 
-            {/* Duration */}
             <div>
               <label className="block text-sm font-medium mb-2 text-neutral">Duración</label>
               <select
@@ -598,7 +579,6 @@ export default function RecurringBookingsPage() {
               </select>
             </div>
 
-            {/* Court */}
             <div>
               <label className="block text-sm font-medium mb-2 text-neutral">Cancha</label>
               <select
@@ -627,11 +607,10 @@ export default function RecurringBookingsPage() {
               </p>
             </div>
 
-            {/* Create button */}
             <div className="md:col-span-2 flex items-end">
               <button
                 onClick={createRecurringBooking}
-                disabled={!selectedUser || !selectedTime || !firstDate}
+                disabled={!selectedClient || !selectedTime || !firstDate}
                 className="bg-success text-light px-4 py-2 rounded hover:bg-success-light disabled:bg-muted disabled:text-neutral-muted transition-colors"
               >
                 Crear Reserva Recurrente
@@ -641,12 +620,11 @@ export default function RecurringBookingsPage() {
         </div>
       )}
 
-      {/* Recurring bookings table */}
       <div className="bg-surface rounded border border-muted overflow-hidden">
         <table className="w-full">
           <thead className="bg-muted/50">
             <tr>
-              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Usuario</th>
+              <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Cliente</th>
               <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Día</th>
               <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Horario</th>
               <th className="px-3 py-3 text-left text-sm font-medium text-neutral">Cancha</th>
@@ -661,18 +639,23 @@ export default function RecurringBookingsPage() {
                 <td className="px-3 py-3">
                   <div>
                     <div className="font-medium text-neutral text-sm">
-                      {booking.user?.full_name || 'Usuario no encontrado'}
+                      {bookingDisplayName(booking)}
                     </div>
-                    <div className="text-xs text-neutral-muted">{booking.user?.email}</div>
+                    {bookingDisplayContact(booking) && (
+                      <div className="text-xs text-neutral-muted">
+                        {bookingDisplayContact(booking)}
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-3">
                   <div className="space-y-1">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
-                      {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(booking.first_date)))}
+                      {getDayNameBuenosAires(getDayOfWeekBuenosAires(booking.first_date))}
                     </span>
                     <div className="text-xs text-neutral-muted">
-                      {booking.first_date} (cada {booking.recurrence_interval_days} días)
+                      {formatDateDisplay(booking.first_date)} (cada {booking.recurrence_interval_days}{' '}
+                      días)
                     </div>
                   </div>
                 </td>
@@ -775,78 +758,79 @@ export default function RecurringBookingsPage() {
         )}
       </div>
 
-      {/* Edit Modal */}
       {editingBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-surface p-6 rounded-lg border border-muted max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 text-neutral">Editar Reserva Recurrente</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* User selection */}
-              <div className="user-dropdown-container">
-                <label className="block text-sm font-medium mb-2 text-neutral">Usuario</label>
-                {editSelectedUserInfo ? (
-                  <div className="border border-muted rounded px-3 py-2 bg-surface">
-                    <p className="font-medium text-neutral">{editSelectedUserInfo.full_name}</p>
-                    <p className="text-sm text-neutral">{editSelectedUserInfo.email}</p>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-neutral">Cliente</label>
+                {editSelectedClient ? (
+                  <div className="flex items-center justify-between gap-2 border border-accent rounded px-3 py-2 bg-accent/10 text-neutral">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{editSelectedClient.full_name}</p>
+                      <p className="text-xs opacity-80 truncate">
+                        {editSelectedClient.phone || 'Sin teléfono'}
+                        {editSelectedClient.email ? ` · ${editSelectedClient.email}` : ''}
+                      </p>
+                    </div>
                     <button
+                      type="button"
                       onClick={() => {
-                        setEditForm({ ...editForm, user_id: '' });
-                        setEditSelectedUserInfo(null);
-                        setEditUserSearchTerm('');
+                        setEditForm({ ...editForm, client_id: '' });
+                        setEditSelectedClient(null);
+                        setEditClientSearchTerm('');
                       }}
-                      className="text-sm text-error hover:underline mt-1"
+                      className="text-xs shrink-0 underline"
                     >
-                      Cambiar usuario
+                      Cambiar
                     </button>
                   </div>
                 ) : (
                   <>
                     <input
                       type="text"
-                      placeholder="Buscar por nombre o email..."
-                      value={editUserSearchTerm}
-                      onChange={(e) => {
-                        setEditUserSearchTerm(e.target.value);
-                        setShowEditUserDropdown(true);
-                      }}
-                      onFocus={() => setShowEditUserDropdown(true)}
+                      placeholder="Buscar nombre, email o teléfono (2+ caracteres)…"
+                      value={editClientSearchTerm}
+                      onChange={(e) => setEditClientSearchTerm(e.target.value)}
                       className="border border-muted rounded px-3 py-2 w-full bg-surface text-neutral"
+                      autoComplete="off"
                     />
-                    {showEditUserDropdown && editUserSearchTerm && (
+                    {editClientSearchTerm.trim().length >= 2 && (
                       <div className="mt-2 max-h-40 overflow-y-auto border border-muted rounded bg-surface">
-                        {editFilteredUsers.length === 0 ? (
-                          <div className="px-3 py-2 text-neutral-muted">
-                            No se encontraron usuarios. Total cargados: {users.length}
-                          </div>
-                        ) : (
-                          <>
-                            <div className="px-3 py-2 text-xs text-neutral-muted border-b border-muted">
-                              {editFilteredUsers.length} usuarios encontrados
-                            </div>
-                            {editFilteredUsers.map((user) => (
-                              <div
-                                key={user.id}
-                                onClick={() => {
-                                  setEditForm({ ...editForm, user_id: user.id });
-                                  setEditSelectedUserInfo(user);
-                                  setEditUserSearchTerm(user.full_name || user.email);
-                                  setShowEditUserDropdown(false);
-                                }}
-                                className="px-3 py-2 hover:bg-accent cursor-pointer border-b border-muted last:border-b-0 text-neutral"
-                              >
-                                {user.full_name || 'Sin nombre'} ({user.email})
-                              </div>
-                            ))}
-                          </>
+                        {editSearchingClients && (
+                          <div className="px-3 py-2 text-sm text-neutral-muted">Buscando…</div>
                         )}
+                        {!editSearchingClients && editClientSuggestions.length === 0 && (
+                          <div className="px-3 py-2 text-sm text-neutral-muted">
+                            Sin resultados. Creá el cliente en Clientes.
+                          </div>
+                        )}
+                        {editClientSuggestions.map((client) => (
+                          <div
+                            key={client.id}
+                            onClick={() => {
+                              setEditForm({ ...editForm, client_id: client.id });
+                              setEditSelectedClient(client);
+                              setEditClientSearchTerm(client.full_name);
+                              setEditClientSuggestions([]);
+                            }}
+                            className="px-3 py-2 text-neutral hover:bg-accent hover:text-dark cursor-pointer border-b border-muted last:border-b-0"
+                          >
+                            <div className="font-medium">{client.full_name}</div>
+                            <div className="text-xs opacity-80">
+                              {client.phone || 'Sin teléfono'}
+                              {client.email ? ` · ${client.email}` : ''}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
                 )}
               </div>
 
-              {/* First date */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">
                   Fecha de inicio
@@ -860,12 +844,11 @@ export default function RecurringBookingsPage() {
                 {editForm.first_date && (
                   <p className="text-sm text-neutral mt-1">
                     Día de la semana:{' '}
-                    {getDayNameBuenosAires(getDayOfWeekBuenosAires(new Date(editForm.first_date)))}
+                    {getDayNameBuenosAires(getDayOfWeekBuenosAires(editForm.first_date))}
                   </p>
                 )}
               </div>
 
-              {/* Time selection */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">Horario</label>
                 <div className="mb-2">
@@ -892,7 +875,6 @@ export default function RecurringBookingsPage() {
                 </select>
               </div>
 
-              {/* Duration */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">Duración</label>
                 <select
@@ -911,7 +893,6 @@ export default function RecurringBookingsPage() {
                 </select>
               </div>
 
-              {/* Court */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">Cancha</label>
                 <select
@@ -927,7 +908,6 @@ export default function RecurringBookingsPage() {
                 </select>
               </div>
 
-              {/* Last date */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-neutral">
                   Fecha de fin (opcional)
@@ -943,7 +923,6 @@ export default function RecurringBookingsPage() {
                 </p>
               </div>
 
-              {/* Active status */}
               <div className="md:col-span-2">
                 <label className="flex items-center gap-2">
                   <input
@@ -957,7 +936,6 @@ export default function RecurringBookingsPage() {
               </div>
             </div>
 
-            {/* Action buttons */}
             <div className="flex gap-2 pt-4">
               <button
                 onClick={cancelEdit}
@@ -967,7 +945,7 @@ export default function RecurringBookingsPage() {
               </button>
               <button
                 onClick={saveEdit}
-                disabled={!editForm.user_id || !editForm.start_time}
+                disabled={(!editSelectedClient && !editForm.client_id) || !editForm.start_time}
                 className="flex-1 bg-success text-light px-4 py-2 rounded hover:bg-success-light disabled:bg-muted disabled:text-neutral-muted transition-colors"
               >
                 Guardar Cambios

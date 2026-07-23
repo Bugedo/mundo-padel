@@ -4,13 +4,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useState, useRef } from 'react';
 import { useUser } from '@/context/UserContext';
-import { LogIn, Calendar, UserCircle } from 'lucide-react';
+import { LayoutDashboard, UserCircle } from 'lucide-react';
 import LogoutButton from '@/components/LogoutButton';
 
 export default function Header() {
   const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     setMenuOpen(false);
@@ -32,20 +33,9 @@ export default function Header() {
     };
   }, [menuOpen]);
 
-  if (loading) {
-    return (
-      <header className="fixed top-0 left-0 right-0 z-50 bg-surface/95 backdrop-blur-sm shadow-md border-b border-muted">
-        <div className="container mx-auto px-4 py-2 flex justify-between items-center">
-          <span className="text-lg font-bold text-neutral">Cargando...</span>
-        </div>
-      </header>
-    );
-  }
-
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-surface/95 backdrop-blur-sm shadow-md border-b border-muted">
       <div className="container mx-auto px-4 py-2 flex justify-between items-center">
-        {/* Logo */}
         <Link href="/" className="flex items-center">
           <Image
             src="/photos/logo.PNG"
@@ -56,17 +46,8 @@ export default function Header() {
           />
         </Link>
 
-        {/* Right side: login or user */}
-        <nav className="flex gap-4 items-center">
-          {!user ? (
-            <Link
-              href="/login"
-              className="flex items-center gap-2 bg-accent text-background px-3 py-1 rounded hover:bg-accent-hover transition text-sm"
-            >
-              <LogIn size={16} />
-              Iniciar sesión
-            </Link>
-          ) : (
+        <nav className="flex gap-4 items-center min-h-[36px]">
+          {!loading && isAdmin && (
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -81,14 +62,14 @@ export default function Header() {
                   <div className="px-4 py-2 border-b border-muted text-neutral text-sm">
                     {user.email}
                   </div>
-                  <div className="px-4 py-2">
+                  <div className="px-4 py-2 space-y-2">
                     <Link
-                      href={`/${user.id}/reservas`}
-                      className="flex items-center gap-2 text-neutral hover:text-primary transition mb-2"
+                      href="/admin/bookings"
+                      className="flex items-center gap-2 text-neutral hover:text-primary transition"
                       onClick={() => setMenuOpen(false)}
                     >
-                      <Calendar size={16} />
-                      Ver mis reservas
+                      <LayoutDashboard size={16} />
+                      Panel admin
                     </Link>
                     <LogoutButton onLogout={() => setMenuOpen(false)} />
                   </div>

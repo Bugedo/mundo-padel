@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminTurnero from './AdminTurnero';
-import { getBuenosAiresDate, formatDateForAPIWithoutConversion } from '@/lib/timezoneUtils';
+import { getBuenosAiresDate, formatDateOnly } from '@/lib/timezoneUtils';
 
 interface Booking {
   id: string;
-  user_id: string;
+  user_id?: string | null;
+  guest_name?: string | null;
+  guest_phone?: string | null;
   court: number | null;
   date: string;
   start_time: string;
@@ -16,7 +18,6 @@ interface Booking {
   present: boolean;
   cancelled: boolean;
   absent?: boolean;
-  expires_at?: string;
   is_recurring?: boolean;
   recurring_booking_id?: string;
   comment?: string;
@@ -36,7 +37,7 @@ export default function BookingsAdminPage() {
   // Función para obtener reservas de una fecha específica (con cache)
   const getBookingsForDate = useCallback(
     (date: Date): Booking[] => {
-      const dateString = formatDateForAPIWithoutConversion(date);
+      const dateString = formatDateOnly(date);
       return bookingsCache[dateString] || [];
     },
     [bookingsCache],
@@ -46,7 +47,7 @@ export default function BookingsAdminPage() {
   const preloadBookings = useCallback(
     async (dates: Date[]) => {
       const datesToLoad = dates.filter((date) => {
-        const dateString = formatDateForAPIWithoutConversion(date);
+        const dateString = formatDateOnly(date);
         return !bookingsCache[dateString] && !loadingDates.has(dateString);
       });
 
@@ -55,7 +56,7 @@ export default function BookingsAdminPage() {
       // Marcar fechas como cargando
       setLoadingDates((prev) => {
         const newSet = new Set(prev);
-        datesToLoad.forEach((date) => newSet.add(formatDateForAPIWithoutConversion(date)));
+        datesToLoad.forEach((date) => newSet.add(formatDateOnly(date)));
         return newSet;
       });
 
@@ -66,7 +67,7 @@ export default function BookingsAdminPage() {
           const batch = datesToLoad.slice(i, i + batchSize);
 
           const promises = batch.map(async (date) => {
-            const dateString = formatDateForAPIWithoutConversion(date);
+            const dateString = formatDateOnly(date);
             const res = await fetch(`/api/bookings?date=${dateString}`, {
               cache: 'no-store',
               // Agregar timeout para evitar requests colgados
@@ -98,7 +99,7 @@ export default function BookingsAdminPage() {
         // Remover fechas de la lista de cargando
         setLoadingDates((prev) => {
           const newSet = new Set(prev);
-          datesToLoad.forEach((date) => newSet.delete(formatDateForAPIWithoutConversion(date)));
+          datesToLoad.forEach((date) => newSet.delete(formatDateOnly(date)));
           return newSet;
         });
       }
@@ -108,7 +109,7 @@ export default function BookingsAdminPage() {
 
   // Función para recargar reservas de una fecha específica
   const reloadBookingsForDate = useCallback(async (date: Date) => {
-    const dateString = formatDateForAPIWithoutConversion(date);
+    const dateString = formatDateOnly(date);
 
     setLoadingDates((prev) => new Set(prev).add(dateString));
 
@@ -136,7 +137,7 @@ export default function BookingsAdminPage() {
   // Función para obtener reservas de la fecha seleccionada (mantener compatibilidad)
   const fetchBookings = useCallback(async () => {
     setLoading(true);
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
+    const dateString = formatDateOnly(selectedDate);
 
     // Si ya tenemos las reservas en cache, usarlas
     if (bookingsCache[dateString]) {
@@ -173,7 +174,7 @@ export default function BookingsAdminPage() {
   }, [selectedDate, fetchBookings]);
 
   const updateBooking = async (id: string, field: keyof Booking, value: boolean) => {
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
+    const dateString = formatDateOnly(selectedDate);
     console.log('Updating booking:', { id, field, value, dateString });
 
     const res = await fetch(`/api/bookings?date=${dateString}`, {

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
-import { getBuenosAiresDate, getDayOfWeekBuenosAires, formatDateForAPI } from '@/lib/timezoneUtils';
+import {
+  addDaysToDateOnly,
+  getDayOfWeekBuenosAires,
+  getTodayBuenosAires,
+} from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,18 +14,16 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: Request) {
   try {
-    // Validate admin access
     const { isAdmin, error: authError } = await validateAdminUser();
     if (!isAdmin) {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { weeks = 8 } = body; // Default to 8 weeks (2 months)
+    const { weeks = 8 } = body;
 
     console.log(`Seeding recurring bookings for ${weeks} weeks...`);
 
-    // Get all active recurring bookings
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const today = getBuenosAiresDate();
+    const todayString = getTodayBuenosAires();
     let totalCreated = 0;
     const results: Array<{
       recurringId: string;
@@ -60,63 +62,75 @@ export async function POST(req: Request) {
         errors: [] as string[],
       };
 
-      // Generate bookings for the next X weeks
-      for (let week = 0; week < weeks; week++) {
-        for (let day = 0; day < 7; day++) {
-          const checkDate = new Date(today);
-          checkDate.setDate(today.getDate() + week * 7 + day);
-          const checkDateString = formatDateForAPI(checkDate);
-          const checkDayOfWeek = getDayOfWeekBuenosAires(checkDate);
+      const totalDays = weeks * 7;
+      for (let offset = 0; offset < totalDays; offset++) {
+        const checkDateString = addDaysToDateOnly(todayString, offset);
+        const checkDayOfWeek = getDayOfWeekBuenosAires(checkDateString);
 
-          // Only create bookings for the correct day of week
-          if (checkDayOfWeek !== recurring.day_of_week) {
+        if (
+          recurring.day_of_week !== undefined &&
+          recurring.day_of_week !== null &&
+          checkDayOfWeek !== recurring.day_of_week
+        ) {
+          continue;
+        }
+
+        // Prefer SQL recurrence check when day_of_week column is absent
+        if (recurring.day_of_week === undefined || recurring.day_of_week === null) {
+          const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
+            'should_have_recurring_booking',
+            {
+              p_recurring_id: recurring.id,
+              p_check_date: checkDateString,
+            },
+          );
+          if (checkError || !shouldBeActive) {
             continue;
           }
+        }
 
-          // Check if booking already exists
-          const { data: existingBooking } = await supabaseAdmin
-            .from('bookings')
-            .select('id')
-            .eq('date', checkDateString)
-            .eq('recurring_booking_id', recurring.id)
-            .single();
+        const { data: existingBooking } = await supabaseAdmin
+          .from('bookings')
+          .select('id')
+          .eq('date', checkDateString)
+          .eq('recurring_booking_id', recurring.id)
+          .single();
 
-          if (existingBooking) {
-            continue; // Skip if already exists
-          }
+        if (existingBooking) {
+          continue;
+        }
 
-          // Check if date is within recurring booking date range
-          if (recurring.start_date && checkDate < new Date(recurring.start_date)) {
-            continue; // Skip if before start date
-          }
+        const startBound = recurring.start_date || recurring.first_date;
+        const endBound = recurring.end_date || recurring.last_date;
+        if (startBound && checkDateString < String(startBound).slice(0, 10)) {
+          continue;
+        }
+        if (endBound && checkDateString > String(endBound).slice(0, 10)) {
+          continue;
+        }
 
-          if (recurring.end_date && checkDate > new Date(recurring.end_date)) {
-            continue; // Skip if after end date
-          }
+        const { error: insertError } = await supabaseAdmin.from('bookings').insert({
+          user_id: recurring.user_id,
+          court: recurring.court,
+          date: checkDateString,
+          start_time: recurring.start_time,
+          end_time: recurring.end_time,
+          duration_minutes: recurring.duration_minutes,
+          confirmed: true,
+          present: false,
+          cancelled: false,
+          is_recurring: true,
+          recurring_booking_id: recurring.id,
+          created_by: recurring.user_id,
+        });
 
-          // Create the booking
-          const { error: insertError } = await supabaseAdmin.from('bookings').insert({
-            user_id: recurring.user_id,
-            court: recurring.court,
-            date: checkDateString,
-            start_time: recurring.start_time,
-            end_time: recurring.end_time,
-            duration_minutes: recurring.duration_minutes,
-            confirmed: true, // Recurring bookings are always confirmed
-            present: false,
-            cancelled: false,
-            recurring_booking_id: recurring.id,
-            created_by: recurring.user_id, // Add the required created_by field
-          });
-
-          if (insertError) {
-            recurringResults.errors.push(`${checkDateString}: ${insertError.message}`);
-            console.error(`Error creating booking for ${checkDateString}:`, insertError);
-          } else {
-            recurringResults.created++;
-            totalCreated++;
-            console.log(`Created booking for ${checkDateString} at ${recurring.start_time}`);
-          }
+        if (insertError) {
+          recurringResults.errors.push(`${checkDateString}: ${insertError.message}`);
+          console.error(`Error creating booking for ${checkDateString}:`, insertError);
+        } else {
+          recurringResults.created++;
+          totalCreated++;
+          console.log(`Created booking for ${checkDateString} at ${recurring.start_time}`);
         }
       }
 

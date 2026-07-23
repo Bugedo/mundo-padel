@@ -1,38 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
+import { addDaysToDateOnly } from '@/lib/timezoneUtils';
 import {
-  isBookingExpiredBuenosAires,
-  formatDateForAPI,
-} from '@/lib/timezoneUtils';
-
-// interface Booking {
-//   id: string;
-//   user_id: string;
-//   court: number | null;
-//   date: string;
-//   start_time: string;
-//   end_time: string;
-//   duration_minutes: number;
-//   confirmed: boolean;
-//   present: boolean;
-//   cancelled: boolean;
-//   absent?: boolean;
-//   expires_at?: string;
-//   is_recurring?: boolean;
-//   recurring_booking_id?: string;
-//   comment?: string;
-//   user?: {
-//     full_name: string;
-//     email: string;
-//     phone?: string;
-//   };
-// }
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+  assignCourt,
+  findOverlappingBookings,
+  formatPhoneDisplay,
+  normalizeArgentinePhone,
+  supabaseAdmin,
+} from '@/lib/bookingUtils';
 
 export async function GET(req: Request) {
   // Add admin validation
@@ -80,7 +55,7 @@ async function generateNextRecurringBooking(
       return;
     }
 
-    const currentDate = new Date(completedBooking.date as string);
+    const currentDate = String(completedBooking.date).slice(0, 10);
 
     // Get the recurring booking template
     const { data: recurringBooking, error: recurringError } = await supabaseAdmin
@@ -95,10 +70,11 @@ async function generateNextRecurringBooking(
       return;
     }
 
-    // Calculate next booking date using the recurrence interval
-    const nextDate = new Date(currentDate);
-    nextDate.setDate(currentDate.getDate() + recurringBooking.recurrence_interval_days);
-    const nextDateString = formatDateForAPI(nextDate);
+    // Calculate next booking date using the recurrence interval (calendar days)
+    const nextDateString = addDaysToDateOnly(
+      currentDate,
+      recurringBooking.recurrence_interval_days,
+    );
 
     // Check if there's already a booking for this recurring booking on the next date
     const { data: existingBooking } = await supabaseAdmin
@@ -110,9 +86,10 @@ async function generateNextRecurringBooking(
 
     if (existingBooking) {
       // If booking already exists, try another interval further in the future
-      const futureDate = new Date(nextDate);
-      futureDate.setDate(nextDate.getDate() + recurringBooking.recurrence_interval_days);
-      const futureDateString = formatDateForAPI(futureDate);
+      const futureDateString = addDaysToDateOnly(
+        nextDateString,
+        recurringBooking.recurrence_interval_days,
+      );
 
       // Check if there's already a booking for this recurring booking on the future date
       const { data: futureExistingBooking } = await supabaseAdmin
@@ -143,21 +120,25 @@ async function generateNextRecurringBooking(
 
 // Helper function to create a recurring booking instance
 async function createRecurringBookingInstance(
-  recurringBooking: Record<string, string | number | boolean>,
+  recurringBooking: Record<string, string | number | boolean | null>,
   date: string,
 ) {
   try {
     const { error: insertError } = await supabaseAdmin.from('bookings').insert({
-      user_id: recurringBooking.user_id,
+      user_id: recurringBooking.user_id || null,
+      client_id: recurringBooking.client_id || null,
+      guest_name: recurringBooking.guest_name || null,
+      guest_phone: recurringBooking.guest_phone || null,
       court: recurringBooking.court,
       date: date,
       start_time: recurringBooking.start_time,
       end_time: recurringBooking.end_time,
       duration_minutes: recurringBooking.duration_minutes,
-      confirmed: true, // Recurring bookings are always confirmed
+      confirmed: true,
       present: false,
       cancelled: false,
       recurring_booking_id: recurringBooking.id,
+      is_recurring: true,
     });
 
     if (insertError) {
@@ -172,113 +153,108 @@ async function createRecurringBookingInstance(
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { user_id, date, start_time, end_time, duration_minutes, confirmed, court } = body;
+    const { isAdmin, error: authError, user: adminUser } = await validateAdminUser();
+    if (!isAdmin) {
+      return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
+    }
 
-    // Validate required fields
-    if (!user_id || !date || !start_time || !end_time || !duration_minutes) {
+    const body = await req.json();
+    const {
+      user_id,
+      client_id,
+      guest_name,
+      guest_phone,
+      date,
+      start_time,
+      end_time,
+      duration_minutes,
+      confirmed,
+      court,
+    } = body;
+
+    if (!date || !start_time || !end_time || !duration_minutes) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Check if user exists
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('id', user_id)
-      .single();
+    let resolvedUserId: string | null = user_id || null;
+    let resolvedClientId: string | null = client_id || null;
+    let resolvedGuestName: string | null = null;
+    let resolvedGuestPhone: string | null = null;
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (client_id) {
+      const { data: client, error: clientError } = await supabaseAdmin
+        .from('clients')
+        .select('*')
+        .eq('id', client_id)
+        .single();
+
+      if (clientError || !client) {
+        return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
+      }
+
+      resolvedClientId = client.id;
+      resolvedGuestName = client.full_name;
+      resolvedGuestPhone = client.phone || 'sin-telefono';
+      if (client.phone) {
+        const phone = normalizeArgentinePhone(String(client.phone));
+        if (phone) resolvedGuestPhone = formatPhoneDisplay(phone);
+      }
+    } else if (user_id) {
+      const { data: user, error: userError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, phone')
+        .eq('id', user_id)
+        .single();
+
+      if (userError || !user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      resolvedGuestName = user.full_name;
+      resolvedGuestPhone = user.phone;
+    } else if (guest_name?.trim() && guest_phone) {
+      const phone = normalizeArgentinePhone(String(guest_phone));
+      if (!phone) {
+        return NextResponse.json({ error: 'Invalid guest phone' }, { status: 400 });
+      }
+      resolvedGuestName = String(guest_name).trim().slice(0, 120);
+      resolvedGuestPhone = formatPhoneDisplay(phone);
+    } else {
+      return NextResponse.json(
+        { error: 'Provide client_id, user_id, or guest_name + guest_phone' },
+        { status: 400 },
+      );
     }
 
-    // For non-admin users, only allow creating bookings for themselves
-    const { isAdmin } = await validateAdminUser();
-    if (!isAdmin) {
-      // Get the current user from the request headers or session
-      // For now, we'll allow the booking creation but add validation later
-      // This is a temporary solution - in production you'd want proper user session validation
-    }
-
-    // Calculate time range for conflict checking
-    const [startH, startM] = start_time.split(':').map(Number);
-    const [endH, endM] = end_time.split(':').map(Number);
-    const newStartMinutes = startH * 60 + startM;
-    const newEndMinutes = endH * 60 + endM;
-
-    // Get all bookings for this date and time range
-    const { data: existingBookings, error: existingError } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-      .eq('date', date)
-      .neq('cancelled', true);
+    const { error: existingError, overlapping } = await findOverlappingBookings(
+      date,
+      start_time,
+      end_time,
+    );
 
     if (existingError) {
       return NextResponse.json({ error: existingError.message }, { status: 500 });
     }
 
-    // Get active bookings that overlap with the requested time slot
-    const overlappingBookings = (existingBookings || []).filter((booking) => {
-      const [bh, bm] = booking.start_time.split(':').map(Number);
-      const [eh, em] = booking.end_time.split(':').map(Number);
-      const bookingStartMinutes = bh * 60 + bm;
-      const bookingEndMinutes = eh * 60 + em;
-
-      const active =
-        booking.confirmed ||
-        (booking.expires_at && !isBookingExpiredBuenosAires(booking.expires_at));
-
-      if (!active) return false;
-
-      // Check if the new booking overlaps with this existing booking
-      return (
-        (newStartMinutes < bookingEndMinutes && newEndMinutes > bookingStartMinutes) ||
-        (bookingStartMinutes < newEndMinutes && bookingEndMinutes > newStartMinutes)
-      );
-    });
-
-    // Determine court assignment
-    let selectedCourt = court;
-    if (!selectedCourt) {
-      // Auto-assign to first available court
-      const occupiedCourts = new Set(
-        overlappingBookings.map((b) => b.court).filter((court) => court !== null),
-      );
-
-      // Find first available court
-      for (let i = 1; i <= 3; i++) {
-        if (!occupiedCourts.has(i)) {
-          selectedCourt = i;
-          break;
-        }
-      }
-
-      if (!selectedCourt) {
-        return NextResponse.json({ error: 'No available courts' }, { status: 409 });
-      }
-    } else {
-      // If court is specified (admin booking), validate it's available
-      const courtOccupied = overlappingBookings.some((booking) => booking.court === selectedCourt);
-      if (courtOccupied) {
-        return NextResponse.json(
-          { error: `Court ${selectedCourt} is already occupied in this time slot` },
-          { status: 409 },
-        );
-      }
+    const { court: selectedCourt, error: courtError } = assignCourt(overlapping, court);
+    if (courtError || !selectedCourt) {
+      return NextResponse.json({ error: courtError || 'No available courts' }, { status: 409 });
     }
 
-    // Create the booking
     const bookingData = {
-      user_id,
+      user_id: resolvedUserId,
+      client_id: resolvedClientId,
+      guest_name: resolvedGuestName,
+      guest_phone: resolvedGuestPhone,
       court: selectedCourt,
       date,
       start_time,
       end_time,
       duration_minutes,
-      confirmed: confirmed !== undefined ? confirmed : false,
+      confirmed: confirmed !== undefined ? confirmed : true,
       present: false,
       cancelled: false,
-      expires_at: null, // No timer - bookings stay pending until admin accepts
-      created_by: user_id, // Add the required created_by field
+      expires_at: null,
+      created_by: adminUser?.id || null,
     };
 
     const { data, error: insertError } = await supabaseAdmin

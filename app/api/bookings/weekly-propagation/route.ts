@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBuenosAiresDate, formatDateForAPIWithoutConversion } from '@/lib/timezoneUtils';
+import {
+  addDaysToDateOnly,
+  getDayOfWeekBuenosAires,
+  getTodayBuenosAires,
+} from '@/lib/timezoneUtils';
 
 interface BookingToCreate {
   user_id: string;
@@ -24,9 +28,8 @@ const supabaseAdmin = createClient(
 
 export async function POST() {
   try {
-    // Verificar que es lunes (0 = domingo, 1 = lunes)
-    const now = getBuenosAiresDate();
-    const dayOfWeek = now.getDay();
+    const todayString = getTodayBuenosAires();
+    const dayOfWeek = getDayOfWeekBuenosAires(todayString);
 
     if (dayOfWeek !== 1) {
       return NextResponse.json({
@@ -39,7 +42,6 @@ export async function POST() {
     console.log('🚀 Starting weekly recurring bookings propagation...');
     console.log('🎯 Goal: Ensure 15 days of recurring bookings are always available');
 
-    // Obtener todas las reservas recurrentes activas
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
@@ -62,18 +64,11 @@ export async function POST() {
     let totalPropagated = 0;
     const errors: string[] = [];
 
-    // Calculate date range: ALWAYS ensure next 15 days from today
-    const startDate = new Date(now);
-    const endDate = new Date(now);
-    endDate.setDate(endDate.getDate() + 15);
-    const startDateString = formatDateForAPIWithoutConversion(startDate);
-    const endDateString = formatDateForAPIWithoutConversion(endDate);
+    const startDateString = todayString;
+    const endDateString = addDaysToDateOnly(todayString, 15);
 
     console.log(`📅 Ensuring population range: ${startDateString} to ${endDateString}`);
-    console.log('🔍 Strategy: Check each day and fill any gaps found');
 
-    // Get ALL existing recurring bookings for the entire range to optimize queries
-    console.log('\n🔍 Fetching all existing recurring bookings for the date range...');
     const { data: allExistingBookings, error: allExistingError } = await supabaseAdmin
       .from('bookings')
       .select('date, recurring_booking_id')
@@ -86,7 +81,6 @@ export async function POST() {
       return NextResponse.json({ error: 'Failed to fetch existing bookings' }, { status: 500 });
     }
 
-    // Create a map for quick lookup: date -> Set of recurring_booking_ids
     const existingBookingsMap = new Map<string, Set<string>>();
     allExistingBookings?.forEach((booking) => {
       if (!existingBookingsMap.has(booking.date)) {
@@ -99,27 +93,21 @@ export async function POST() {
 
     console.log(`📊 Found existing bookings for ${existingBookingsMap.size} dates in the range`);
 
-    // Process each day in the range
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateString = formatDateForAPIWithoutConversion(currentDate);
+    let dateString = startDateString;
+    while (dateString <= endDateString) {
       const existingForDate = existingBookingsMap.get(dateString) || new Set();
 
       console.log(`\n📅 Processing date: ${dateString}`);
       console.log(`📊 Found ${existingForDate.size} existing recurring bookings for ${dateString}`);
 
-      let dayBookingsCreated = 0;
       const bookingsToCreate: BookingToCreate[] = [];
 
-      // Process each recurring booking
       for (const recurring of recurringBookings) {
-        // Skip if booking already exists for this date
         if (existingForDate.has(recurring.id)) {
           console.log(`⏭️ Skipping ${recurring.id} - already exists for ${dateString}`);
           continue;
         }
 
-        // Check if this date should have a recurring booking using the database function
         const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
           'should_have_recurring_booking',
           {
@@ -139,7 +127,6 @@ export async function POST() {
           continue;
         }
 
-        // Prepare booking for batch insert
         bookingsToCreate.push({
           user_id: recurring.user_id,
           court: recurring.court,
@@ -158,7 +145,6 @@ export async function POST() {
         console.log(`➕ Queued booking for ${recurring.id} on ${dateString}`);
       }
 
-      // Batch insert all bookings for this date
       if (bookingsToCreate.length > 0) {
         const { error: insertError } = await supabaseAdmin
           .from('bookings')
@@ -168,15 +154,14 @@ export async function POST() {
           console.error(`❌ Error creating bookings for ${dateString}:`, insertError);
           errors.push(`Error creating bookings for ${dateString}: ${insertError.message}`);
         } else {
-          dayBookingsCreated = bookingsToCreate.length;
-          totalPropagated += dayBookingsCreated;
-          console.log(`✅ Created ${dayBookingsCreated} bookings for ${dateString}`);
+          totalPropagated += bookingsToCreate.length;
+          console.log(`✅ Created ${bookingsToCreate.length} bookings for ${dateString}`);
         }
       } else {
         console.log(`✅ No bookings needed for ${dateString} - all covered`);
       }
 
-      currentDate.setDate(currentDate.getDate() + 1);
+      dateString = addDaysToDateOnly(dateString, 1);
     }
 
     console.log(`\n🎉 Weekly propagation completed!`);
@@ -186,22 +171,16 @@ export async function POST() {
     console.log(`   - Recurring bookings processed: ${recurringBookings.length}`);
     console.log(`   - Errors encountered: ${errors.length}`);
 
-    if (totalPropagated > 0) {
-      console.log(`✅ Successfully ensured 15 days of recurring bookings are available!`);
-    } else {
-      console.log(`ℹ️ All 15 days were already properly populated - no gaps found!`);
-    }
-
     return NextResponse.json({
       success: true,
       message: 'Weekly propagation completed successfully',
       propagated: totalPropagated,
       recurringBookings: recurringBookings.length,
       errors: errors,
-      executedAt: now.toISOString(),
-      timezone: 'Buenos Aires (UTC-3)',
+      executedAt: new Date().toISOString(),
+      timezone: 'America/Argentina/Buenos_Aires',
       dateRange: {
-        start: formatDateForAPIWithoutConversion(now),
+        start: startDateString,
         end: endDateString,
       },
     });
@@ -214,12 +193,9 @@ export async function POST() {
   }
 }
 
-// Endpoint GET para testing manual
 export async function GET() {
   try {
     console.log('Manual trigger of weekly propagation...');
-
-    // Llamar directamente a la lógica POST sin parámetros
     return await POST();
   } catch (error) {
     console.error('Error in manual weekly propagation:', error);

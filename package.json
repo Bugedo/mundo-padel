@@ -23,7 +23,7 @@
   "homepage": "https://github.com/CaimanBrujo/template-next.js#readme",
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.51.0",
+    "@supabase/supabase-js": "^2.110.8",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",

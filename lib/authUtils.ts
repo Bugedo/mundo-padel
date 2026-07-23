@@ -1,26 +1,9 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@/utils/supabase/server';
 
 export async function validateAdminUser() {
   try {
-    const cookieStore = await cookies();
+    const supabase = await createClient();
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll() {
-            // Ignore setAll in server components
-          },
-        },
-      },
-    );
-
-    // Check if user is authenticated
     const {
       data: { user },
       error: authError,
@@ -30,7 +13,6 @@ export async function validateAdminUser() {
       return { isAdmin: false, error: 'Not authenticated' };
     }
 
-    // Check if user is admin
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')

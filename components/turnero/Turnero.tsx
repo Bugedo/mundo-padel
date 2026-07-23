@@ -2,18 +2,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from '@/lib/supabaseClient';
-import { useUser } from '@/context/UserContext';
 import {
   getBuenosAiresDate,
-  formatDateForAPIWithoutConversion,
-  getAvailableDatesWithoutConversion,
+  formatDateOnly,
+  getAvailableDatesBuenosAires,
   isTodayBuenosAires,
-  isBookingExpiredBuenosAires,
 } from '@/lib/timezoneUtils';
+
+const LS_GUEST_NAME = 'mp_guest_name';
+const LS_GUEST_PHONE = 'mp_guest_phone';
 
 interface Booking {
   id: string;
-  user_id: string;
+  user_id?: string | null;
+  guest_name?: string | null;
+  guest_phone?: string | null;
   court: number;
   date: string;
   start_time: string;
@@ -22,21 +25,21 @@ interface Booking {
   confirmed: boolean;
   present: boolean;
   cancelled: boolean;
-  expires_at?: string;
   is_recurring?: boolean;
   recurring_booking_id?: string;
 }
 
 interface PendingBooking {
   id: string;
-  user_id: string;
+  guest_name?: string | null;
+  guest_phone?: string | null;
   court: number;
   date: string;
   start_time: string;
   end_time: string;
   duration_minutes: number;
   confirmed: boolean;
-  expires_at: string;
+  whatsapp_url?: string;
 }
 
 interface RecurringBooking {
@@ -87,8 +90,29 @@ const allSlots = [
   { start: '23:30', end: '00:00' },
 ];
 
+function loadGuestFromStorage() {
+  if (typeof window === 'undefined') return { name: '', phone: '' };
+  try {
+    return {
+      name: localStorage.getItem(LS_GUEST_NAME) || '',
+      phone: localStorage.getItem(LS_GUEST_PHONE) || '',
+    };
+  } catch {
+    return { name: '', phone: '' };
+  }
+}
+
+function saveGuestToStorage(name: string, phone: string) {
+  try {
+    localStorage.setItem(LS_GUEST_NAME, name);
+    localStorage.setItem(LS_GUEST_PHONE, phone);
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export default function Turnero() {
-  const { user, loading } = useUser();
+  const [step, setStep] = useState<'slots' | 'guest'>('slots');
   const [selectedDate, setSelectedDate] = useState(getBuenosAiresDate());
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
@@ -97,10 +121,19 @@ export default function Turnero() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsCache, setBookingsCache] = useState<{ [date: string]: Booking[] }>({});
   const [pendingBooking, setPendingBooking] = useState<PendingBooking | null>(null);
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const slots = showEarly ? allSlots : allSlots.filter((slot) => slot.start >= '16:30');
 
-  // Precalculate red slots for all dates to avoid glitches
+  useEffect(() => {
+    const saved = loadGuestFromStorage();
+    if (saved.name) setGuestName(saved.name);
+    if (saved.phone) setGuestPhone(saved.phone);
+  }, []);
+
   const redSlotsByDate = useMemo(() => {
     const redSlots: { [date: string]: Set<string> } = {};
 
@@ -108,23 +141,18 @@ export default function Turnero() {
       const bookingsForDate = bookingsCache[dateString];
       const redSlotsForDate = new Set<string>();
 
-      // Calculate red slots for this date
       allSlots.forEach((slot) => {
         const [th, tm] = slot.start.split(':').map(Number);
         const checkMinutes = th * 60 + tm;
 
-        // Get all active bookings that overlap with this time
         const overlappingBookings = bookingsForDate.filter((b) => {
           const [bh, bm] = b.start_time.split(':').map(Number);
           const bStart = bh * 60 + bm;
           const bEnd = bStart + (b.duration_minutes || 90);
-          const active =
-            (b.confirmed || (b.expires_at && !isBookingExpiredBuenosAires(b.expires_at))) &&
-            !b.cancelled;
+          const active = !b.cancelled;
           return active && checkMinutes >= bStart && checkMinutes < bEnd;
         });
 
-        // Count unique courts that are occupied
         const occupiedCourts = new Set(
           overlappingBookings.map((b) => b.court).filter((court) => court !== null),
         );
@@ -140,39 +168,36 @@ export default function Turnero() {
     return redSlots;
   }, [bookingsCache]);
 
-  // Generar los 7 días disponibles (hoy + 6 posteriores) sin conversión de zona horaria
-  const getAvailableDates = (): Date[] => {
-    return getAvailableDatesWithoutConversion();
-  };
+  const getAvailableDates = (): Date[] => getAvailableDatesBuenosAires();
 
-  const formatDayName = (date: Date) => {
-    return date.toLocaleDateString('es-AR', { weekday: 'short' });
-  };
+  const formatDayName = (date: Date) =>
+    date.toLocaleDateString('es-AR', { weekday: 'short' });
 
-  const formatDayNumber = (date: Date) => {
-    return date.getDate();
-  };
+  const formatDayNumber = (date: Date) => date.getDate();
 
-  const formatMonth = (date: Date) => {
-    return date.toLocaleDateString('es-AR', { month: 'short' });
-  };
+  const formatMonth = (date: Date) =>
+    date.toLocaleDateString('es-AR', { month: 'short' });
 
-  const isToday = (date: Date) => {
-    return isTodayBuenosAires(date);
-  };
+  const formatDateLabel = (date: Date) =>
+    date.toLocaleDateString('es-AR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+
+  const isToday = (date: Date) => isTodayBuenosAires(date);
 
   const isSelected = useCallback(
-    (date: Date) => {
-      return date.toDateString() === selectedDate.toDateString();
-    },
+    (date: Date) => date.toDateString() === selectedDate.toDateString(),
     [selectedDate],
   );
 
   const handleDateChange = useCallback(
     (date: Date) => {
       setSelectedDate(date);
-      // Immediately update bookings from cache
-      const dateString = formatDateForAPIWithoutConversion(date);
+      setSelectedSlot(null);
+      setStep('slots');
+      const dateString = formatDateOnly(date);
       if (bookingsCache[dateString]) {
         setBookings(bookingsCache[dateString]);
       }
@@ -180,11 +205,9 @@ export default function Turnero() {
     [bookingsCache],
   );
 
-  // Fetch recurring bookings for the selected date
   const fetchRecurringBookings = useCallback(async () => {
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
+    const dateString = formatDateOnly(selectedDate);
 
-    // Use the database function to check which recurring bookings should be active on this date
     const { data: recurringBookings, error } = await supabase
       .from('recurring_bookings')
       .select('*')
@@ -193,11 +216,9 @@ export default function Turnero() {
       .is('last_date', null);
 
     if (!error && recurringBookings) {
-      // Filter recurring bookings that should be active on this specific date
       const applicableRecurringBookings: RecurringBooking[] = [];
 
       for (const recurring of recurringBookings) {
-        // Check if this date should have a recurring booking
         const { data: shouldBeActive, error: checkError } = await supabase.rpc(
           'should_have_recurring_booking',
           {
@@ -211,7 +232,6 @@ export default function Turnero() {
         }
       }
 
-      // Convert recurring bookings to regular bookings for the selected date
       const recurringBookingsForDate = applicableRecurringBookings.map((recurring) => ({
         id: `recurring-${recurring.id}`,
         user_id: recurring.user_id,
@@ -220,14 +240,12 @@ export default function Turnero() {
         start_time: recurring.start_time,
         end_time: recurring.end_time,
         duration_minutes: recurring.duration_minutes,
-        confirmed: true, // Recurring bookings are always confirmed
+        confirmed: true,
         present: false,
-        expires_at: undefined,
         cancelled: false,
-        is_recurring: true, // Flag to identify recurring bookings
+        is_recurring: true,
       }));
 
-      // Add recurring bookings to existing bookings
       setBookings((prevBookings) => {
         const regularBookings = prevBookings.filter((b) => !b.is_recurring);
         return [...regularBookings, ...recurringBookingsForDate];
@@ -235,16 +253,14 @@ export default function Turnero() {
     }
   }, [selectedDate]);
 
-  // Load all bookings only once on component mount
   useEffect(() => {
     const loadInitialData = async () => {
-      const availableDates = getAvailableDatesWithoutConversion();
+      const availableDates = getAvailableDatesBuenosAires();
       const newCache: { [date: string]: Booking[] } = {};
 
       try {
-        // Load bookings for all dates in parallel - ONLY ONCE
         const promises = availableDates.map(async (date) => {
-          const dateString = formatDateForAPIWithoutConversion(date);
+          const dateString = formatDateOnly(date);
           const response = await fetch(`/api/public-bookings?date=${dateString}`, {
             cache: 'no-store',
           });
@@ -261,8 +277,7 @@ export default function Turnero() {
         await Promise.all(promises);
         setBookingsCache(newCache);
 
-        // Set bookings for the currently selected date
-        const selectedDateString = formatDateForAPIWithoutConversion(selectedDate);
+        const selectedDateString = formatDateOnly(selectedDate);
         setBookings(newCache[selectedDateString] || []);
       } catch (error) {
         console.error('Error loading initial bookings:', error);
@@ -270,16 +285,15 @@ export default function Turnero() {
     };
 
     loadInitialData();
-  }, [selectedDate]); // Include selectedDate dependency
+  }, [selectedDate]);
 
-  // Load recurring bookings for the selected date
   useEffect(() => {
     fetchRecurringBookings();
   }, [selectedDate, fetchRecurringBookings]);
 
   const isFullyReserved = useCallback(
     (time: string) => {
-      const dateString = formatDateForAPIWithoutConversion(selectedDate);
+      const dateString = formatDateOnly(selectedDate);
       return redSlotsByDate[dateString]?.has(time) || false;
     },
     [selectedDate, redSlotsByDate],
@@ -290,7 +304,7 @@ export default function Turnero() {
       const [h, m] = start_time.split(':').map(Number);
       const startMinutes = h * 60 + m;
       const endMinutes = startMinutes + dur;
-      const dateString = formatDateForAPIWithoutConversion(selectedDate);
+      const dateString = formatDateOnly(selectedDate);
 
       for (let minute = startMinutes; minute < endMinutes; minute += 30) {
         const timeString = `${Math.floor(minute / 60)
@@ -323,70 +337,172 @@ export default function Turnero() {
     [selectedSlot, hoverSlot, canFitDuration, duration],
   );
 
-  // This version checks overlapping ranges for court assignment
+  const endTimeForSelection = () => {
+    if (!selectedSlot) return '';
+    const [h, m] = selectedSlot.split(':').map(Number);
+    const endMinutes = h * 60 + m + duration;
+    const endH = Math.floor(endMinutes / 60) % 24;
+    const endM = endMinutes % 60;
+    return `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+  };
+
   const createBooking = async () => {
-    if (!user || loading || !selectedSlot) return;
-    if (!canFitDuration(selectedSlot, duration)) {
-      alert('Not enough space for this duration in the selected slot');
+    if (!selectedSlot || submitting) return;
+    setFormError('');
+
+    if (!guestName.trim()) {
+      setFormError('Ingresá tu nombre');
+      return;
+    }
+    if (!guestPhone.trim()) {
+      setFormError('Ingresá tu celular');
       return;
     }
 
-    const dateString = formatDateForAPIWithoutConversion(selectedDate);
+    if (!canFitDuration(selectedSlot, duration)) {
+      setFormError('No hay espacio suficiente para esta duración');
+      return;
+    }
 
-    const [h, m] = selectedSlot.split(':').map(Number);
-    const startMinutes = h * 60 + m;
-    const endMinutes = startMinutes + duration;
-    const endH = Math.floor(endMinutes / 60) % 24;
-    const endM = endMinutes % 60;
-
+    const dateString = formatDateOnly(selectedDate);
     const start_time = selectedSlot;
-    const end_time = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+    const end_time = endTimeForSelection();
+    const name = guestName.trim();
+    const phone = guestPhone.trim();
 
-    // Use the API endpoint to create booking with automatic court assignment
-    const response = await fetch('/api/bookings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        user_id: user.id,
-        date: dateString,
-        start_time,
-        end_time,
-        duration_minutes: duration,
-        confirmed: false,
-      }),
-    });
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/public-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guest_name: name,
+          guest_phone: phone,
+          date: dateString,
+          start_time,
+          end_time,
+          duration_minutes: duration,
+        }),
+      });
 
-    if (response.ok) {
       const data = await response.json();
+
+      if (!response.ok) {
+        setFormError(data.error || 'No se pudo crear la solicitud');
+        return;
+      }
+
+      saveGuestToStorage(name, phone);
       setPendingBooking(data);
 
-      // Update cache for the selected date
-      const dateString = formatDateForAPIWithoutConversion(selectedDate);
       const updatedBookings = [...bookings, data];
       setBookings(updatedBookings);
       setBookingsCache((prev) => ({ ...prev, [dateString]: updatedBookings }));
-
       setSelectedSlot(null);
-    } else {
-      const errorData = await response.json();
-      console.error('Booking creation error:', errorData);
-      alert(`Error creating booking: ${errorData.error}`);
+      setStep('slots');
+
+      if (data.whatsapp_url) {
+        window.open(data.whatsapp_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      console.error('Booking creation error:', error);
+      setFormError('Error de conexión. Intentá de nuevo.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  if (step === 'guest' && selectedSlot) {
+    return (
+      <section id="turnero" className="pt-20 pb-10 px-6 bg-background text-white min-h-[70vh]">
+        <div className="max-w-md mx-auto space-y-6">
+          <button
+            type="button"
+            onClick={() => {
+              setStep('slots');
+              setFormError('');
+            }}
+            className="text-sm text-neutral hover:text-accent transition"
+          >
+            ← Volver al turnero
+          </button>
+
+          <div className="text-center space-y-1">
+            <h2 className="text-2xl font-bold text-primary">Tus datos</h2>
+            <p className="text-neutral text-sm">
+              {formatDateLabel(selectedDate)} · {selectedSlot} – {endTimeForSelection()} ({duration}{' '}
+              min)
+            </p>
+          </div>
+
+          <div className="bg-surface border border-muted rounded-lg p-5 space-y-4 text-neutral">
+            <div>
+              <label className="block text-sm mb-1" htmlFor="guest-name">
+                Nombre
+              </label>
+              <input
+                id="guest-name"
+                type="text"
+                name="name"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                className="w-full px-3 py-3 rounded border border-muted bg-background text-white text-base"
+                placeholder="Tu nombre"
+                autoComplete="name"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1" htmlFor="guest-phone">
+                Celular
+              </label>
+              <div className="flex gap-2">
+                <span className="flex items-center px-3 rounded border border-muted bg-muted/30 text-sm">
+                  +54
+                </span>
+                <input
+                  id="guest-phone"
+                  type="tel"
+                  name="tel"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  className="flex-1 px-3 py-3 rounded border border-muted bg-background text-white text-base"
+                  placeholder="351 123 4567"
+                  autoComplete="tel"
+                  inputMode="tel"
+                />
+              </div>
+            </div>
+            {formError && <p className="text-red-400 text-sm text-center">{formError}</p>}
+            <button
+              onClick={createBooking}
+              disabled={submitting}
+              className="w-full bg-green-600 px-8 py-3 rounded-lg text-white hover:bg-green-700 font-semibold text-lg shadow-lg transition-colors disabled:opacity-60"
+            >
+              {submitting ? 'Enviando…' : 'Solicitar por WhatsApp'}
+            </button>
+          </div>
+
+          {pendingBooking && <BookingPending booking={pendingBooking} />}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section id="turnero" className="pt-12 pb-6 px-6 bg-background text-white min-h-[70vh]">
-      {/* Date navigation */}
+    <section
+      id="turnero"
+      className={`pt-12 px-6 bg-background text-white min-h-[70vh] ${
+        selectedSlot ? 'pb-28' : 'pb-6'
+      }`}
+    >
       <div className="sticky top-16 z-30 bg-background/95 backdrop-blur-sm border-b border-muted py-4 mb-6">
         <div className="flex justify-center items-center px-4 relative">
-          {/* Turnero width container */}
           <div className="flex justify-between items-center max-w-[800px] w-full">
             <div className="flex gap-2 overflow-x-auto pb-2">
               {getAvailableDates().map((date) => (
                 <button
-                  key={date.toISOString()}
+                  key={formatDateOnly(date)}
                   onClick={() => handleDateChange(date)}
                   className={`flex flex-col items-center justify-center min-w-[60px] h-16 px-3 rounded-lg border-2 transition-all duration-200 ${
                     isSelected(date)
@@ -412,6 +528,7 @@ export default function Turnero() {
                     onClick={() => {
                       setDuration(d as 60 | 90 | 120);
                       setSelectedSlot(null);
+                      setStep('slots');
                     }}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${
                       d === duration
@@ -426,7 +543,6 @@ export default function Turnero() {
             </div>
           </div>
 
-          {/* Horarios Matutinos button positioned absolutely */}
           <button
             onClick={() => setShowEarly(!showEarly)}
             className="absolute right-4 bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
@@ -436,7 +552,6 @@ export default function Turnero() {
         </div>
       </div>
 
-      {/* Slots grid */}
       <div className="flex justify-center">
         <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
           {slots.map(({ start, end }) => {
@@ -464,7 +579,10 @@ export default function Turnero() {
                 }}
                 onMouseLeave={() => setHoverSlot(null)}
                 onClick={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) setSelectedSlot(start);
+                  if (!fullyReserved && !outsideLimit && canFit) {
+                    setSelectedSlot(start);
+                    setPendingBooking(null);
+                  }
                 }}
               >
                 {start} - {end}
@@ -474,38 +592,55 @@ export default function Turnero() {
         </div>
       </div>
 
-      {/* Selected slot info and confirm button */}
-      {selectedSlot && user && !loading && (
-        <div className="mt-6 mb-6 space-y-4">
-          <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-blue-800 font-medium">
-              Horario seleccionado: <span className="font-bold">{selectedSlot}</span>
-            </p>
-            <p className="text-blue-600 text-sm">Duración: {duration} minutos</p>
-          </div>
+      {pendingBooking && step === 'slots' && !selectedSlot && (
+        <BookingPending booking={pendingBooking} />
+      )}
 
-          <div className="flex justify-center">
+      {selectedSlot && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-muted bg-surface/95 backdrop-blur-sm safe-area-pb">
+          <div className="max-w-[800px] mx-auto px-4 py-3 flex items-center gap-3">
+            <div className="flex-1 min-w-0 text-sm text-neutral">
+              <p className="font-semibold text-primary truncate">
+                {selectedSlot} – {endTimeForSelection()}
+              </p>
+              <p className="text-xs opacity-80 truncate">
+                {formatDateLabel(selectedDate)} · {duration} min
+              </p>
+            </div>
             <button
-              onClick={createBooking}
-              className="bg-green-600 px-8 py-3 rounded-lg text-white hover:bg-green-700 font-semibold text-lg shadow-lg transition-colors w-full max-w-xs"
+              type="button"
+              onClick={() => {
+                setFormError('');
+                setStep('guest');
+              }}
+              className="shrink-0 bg-accent text-dark font-semibold px-6 py-3 rounded-lg hover:bg-accent-hover transition shadow-lg"
             >
-              ✅ Confirmar reserva
+              Continuar
             </button>
           </div>
         </div>
       )}
-
-      {/* Pending booking notification */}
-      {pendingBooking && <BookingPending booking={pendingBooking} />}
     </section>
   );
 }
 
-function BookingPending({}: { booking: PendingBooking }) {
+function BookingPending({ booking }: { booking: PendingBooking }) {
   return (
-    <div className="mt-4 bg-yellow-100 p-4 rounded text-black text-center">
-      <p className="mb-2">Tu reserva está pendiente de confirmación.</p>
-      <p className="text-sm">Te notificaremos cuando sea aceptada.</p>
+    <div className="mt-6 bg-yellow-100 p-4 rounded text-black text-center max-w-[800px] mx-auto">
+      <p className="mb-2 font-medium">Tu solicitud quedó pendiente de confirmación.</p>
+      <p className="text-sm mb-3">
+        Recepción la verá en el turnero. Si no se abrió WhatsApp, usá el botón de abajo.
+      </p>
+      {booking.whatsapp_url && (
+        <a
+          href={booking.whatsapp_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700"
+        >
+          Abrir WhatsApp
+        </a>
+      )}
     </div>
   );
 }

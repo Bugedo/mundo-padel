@@ -1,11 +1,8 @@
 'use client';
 
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/utils/supabase/client';
 
-// Create a Supabase browser client for use in client components
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+// Browser client singleton for client components
+const supabase = createClient();
 
 export default supabase;

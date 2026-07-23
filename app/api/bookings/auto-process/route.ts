@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBuenosAiresDate, formatDateForAPI } from '@/lib/timezoneUtils';
+import { getTodayBuenosAires, getCurrentTimeBuenosAires } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,8 +9,8 @@ const supabaseAdmin = createClient(
 
 // Helper function to process completed bookings (mark as present)
 async function processCompletedBookings() {
-  const now = getBuenosAiresDate();
-  const today = formatDateForAPI(now);
+  const today = getTodayBuenosAires();
+  const nowTime = getCurrentTimeBuenosAires(); // HH:MM
 
   // Get all bookings that should have been completed today
   // (bookings that ended before current time and are not cancelled or already marked as present)
@@ -35,13 +35,9 @@ async function processCompletedBookings() {
 
   for (const booking of completedBookings) {
     try {
-      // Check if the booking time has passed
-      const [endHour, endMinute] = booking.end_time.split(':').map(Number);
-      const bookingEndTime = new Date(now);
-      bookingEndTime.setHours(endHour, endMinute, 0, 0);
-
-      // Only process if the booking end time has passed
-      if (now < bookingEndTime) {
+      // Compare wall-clock times as HH:MM strings (BA local)
+      const endTime = String(booking.end_time).slice(0, 5);
+      if (nowTime < endTime) {
         continue;
       }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
-import { formatDateForAPIWithoutConversion } from '@/lib/timezoneUtils';
+import { addDaysToDateOnly, getTodayBuenosAires } from '@/lib/timezoneUtils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +10,6 @@ const supabaseAdmin = createClient(
 
 export async function POST() {
   try {
-    // Validate admin access
     const { isAdmin, error: authError } = await validateAdminUser();
     if (!isAdmin) {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });
@@ -18,7 +17,6 @@ export async function POST() {
 
     console.log('🧹 Starting cleanup of recurring bookings...');
 
-    // 1. Delete all existing recurring booking instances
     const { error: deleteError } = await supabaseAdmin
       .from('bookings')
       .delete()
@@ -31,7 +29,6 @@ export async function POST() {
 
     console.log('✅ Deleted all existing recurring booking instances');
 
-    // 2. Get all active recurring bookings
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
       .select('*')
@@ -52,19 +49,14 @@ export async function POST() {
 
     console.log(`📅 Found ${recurringBookings.length} active recurring bookings`);
 
-    // 3. Regenerate bookings for the next 15 days using correct date formatting
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + 15);
+    const todayString = getTodayBuenosAires();
+    const endDateString = addDaysToDateOnly(todayString, 15);
 
     let totalRegenerated = 0;
     const errors: string[] = [];
 
-    // Process each day in the range
-    const currentDate = new Date(today);
-    while (currentDate <= endDate) {
-      const dateString = formatDateForAPIWithoutConversion(currentDate);
-
+    let dateString = todayString;
+    while (dateString <= endDateString) {
       console.log(`📅 Processing date: ${dateString}`);
 
       const bookingsToCreate: Array<{
@@ -82,9 +74,7 @@ export async function POST() {
         created_by: string;
       }> = [];
 
-      // Process each recurring booking
       for (const recurring of recurringBookings) {
-        // Check if this date should have a recurring booking using the database function
         const { data: shouldBeActive, error: checkError } = await supabaseAdmin.rpc(
           'should_have_recurring_booking',
           {
@@ -103,7 +93,6 @@ export async function POST() {
           continue;
         }
 
-        // Prepare booking for batch insert
         bookingsToCreate.push({
           user_id: recurring.user_id,
           court: recurring.court,
@@ -120,7 +109,6 @@ export async function POST() {
         });
       }
 
-      // Batch insert all bookings for this date
       if (bookingsToCreate.length > 0) {
         const { error: insertError } = await supabaseAdmin
           .from('bookings')
@@ -135,7 +123,7 @@ export async function POST() {
         }
       }
 
-      currentDate.setDate(currentDate.getDate() + 1);
+      dateString = addDaysToDateOnly(dateString, 1);
     }
 
     console.log(`🎉 Cleanup and regeneration completed!`);

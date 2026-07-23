@@ -14,12 +14,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.push('/login');
+        const next = pathname?.startsWith('/admin') ? pathname : '/admin/bookings';
+        router.push(`/login?next=${encodeURIComponent(next)}`);
       } else if (user.role !== 'admin') {
         router.push('/');
       }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname]);
 
   if (loading) {
     return (
@@ -40,7 +41,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const navItems = [
     { name: 'Reservas', href: '/admin/bookings' },
     { name: 'Reservas Recurrentes', href: '/admin/recurring-bookings' },
-    { name: 'Usuarios', href: '/admin/users' },
+    { name: 'Clientes', href: '/admin/clients' },
   ];
 
   return (
