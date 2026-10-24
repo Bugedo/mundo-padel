@@ -4,8 +4,13 @@ import { createClient } from '@/utils/supabase/client';
 
 const supabase = createClient();
 
-export default function LogoutButton({ onLogout }: { onLogout?: () => void }) {
-
+export default function LogoutButton({
+  onLogout,
+  className = 'w-full bg-error text-light px-4 py-2 rounded hover:bg-error/80 text-left',
+}: {
+  onLogout?: () => void;
+  className?: string;
+}) {
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -27,11 +32,8 @@ export default function LogoutButton({ onLogout }: { onLogout?: () => void }) {
   };
 
   return (
-    <button
-      onClick={handleLogout}
-      className="w-full bg-error text-light px-4 py-2 rounded hover:bg-error/80 text-left"
-    >
-      Logout
+    <button onClick={handleLogout} className={className}>
+      Salir
     </button>
   );
 }

@@ -32,34 +32,30 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     } = await supabase.auth.getUser();
 
     if (user) {
-      // Try to fetch profile
-      let { data: profile } = await supabase
+      const { data: initialProfile } = await supabase
         .from('profiles')
         .select('id, email, role, full_name')
         .eq('id', user.id)
         .single();
 
-      // If profile doesn't exist → create it
-      if (!profile) {
-        const { error: insertError } = await supabase.from('profiles').insert({
-          id: user.id,
-          email: user.email ?? '', // fallback
-          role: 'user', // default role
-          full_name: user.user_metadata?.full_name || null,
-        });
+      let profile = initialProfile;
 
-        if (!insertError) {
-          profile = {
-            id: user.id,
-            email: user.email ?? '',
-            role: 'user',
-            full_name: user.user_metadata?.full_name || null,
-          };
-        }
+      // The database trigger creates profiles. Its write can briefly lag behind
+      // the first OAuth session, so retry once before treating it as absent.
+      if (!profile) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const { data: retriedProfile } = await supabase
+          .from('profiles')
+          .select('id, email, role, full_name')
+          .eq('id', user.id)
+          .single();
+        profile = retriedProfile;
       }
 
       if (profile) {
         setUser(profile as User);
+      } else {
+        setUser(null);
       }
     } else {
       setUser(null); // Clear user if logged out

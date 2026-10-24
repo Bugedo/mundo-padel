@@ -11,6 +11,14 @@ export default function Footer() {
           <p>Baltazar de Ávila 146 · Córdoba, Argentina</p>
         </div>
         <div className="md:text-right">
+          <nav aria-label="Enlaces legales" className="mb-2 flex gap-3 md:justify-end">
+            <Link className="underline underline-offset-4 hover:no-underline" href="/privacidad">
+              Privacidad
+            </Link>
+            <Link className="underline underline-offset-4 hover:no-underline" href="/terminos">
+              Términos
+            </Link>
+          </nav>
           <a
             href={`https://wa.me/${whatsappNumber}`}
             target="_blank"
