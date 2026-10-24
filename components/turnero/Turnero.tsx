@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import supabase from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/client';
 import {
   getBuenosAiresDate,
   formatDateOnly,
   getAvailableDatesBuenosAires,
   isTodayBuenosAires,
 } from '@/lib/timezoneUtils';
+
+const supabase = createClient();
 
 const LS_GUEST_NAME = 'mp_guest_name';
 const LS_GUEST_PHONE = 'mp_guest_phone';
@@ -170,13 +172,11 @@ export default function Turnero() {
 
   const getAvailableDates = (): Date[] => getAvailableDatesBuenosAires();
 
-  const formatDayName = (date: Date) =>
-    date.toLocaleDateString('es-AR', { weekday: 'short' });
+  const formatDayName = (date: Date) => date.toLocaleDateString('es-AR', { weekday: 'short' });
 
   const formatDayNumber = (date: Date) => date.getDate();
 
-  const formatMonth = (date: Date) =>
-    date.toLocaleDateString('es-AR', { month: 'short' });
+  const formatMonth = (date: Date) => date.toLocaleDateString('es-AR', { month: 'short' });
 
   const formatDateLabel = (date: Date) =>
     date.toLocaleDateString('es-AR', {
@@ -414,30 +414,33 @@ export default function Turnero() {
 
   if (step === 'guest' && selectedSlot) {
     return (
-      <section id="turnero" className="pt-20 pb-10 px-6 bg-background text-white min-h-[70vh]">
-        <div className="max-w-md mx-auto space-y-6">
+      <section
+        id="turnero"
+        className="rounded-[28px] bg-court p-4 text-line ring-[6px] ring-ink sm:p-[22px]"
+      >
+        <div className="mx-auto max-w-md space-y-6">
           <button
             type="button"
             onClick={() => {
               setStep('slots');
               setFormError('');
             }}
-            className="text-sm text-neutral hover:text-accent transition"
+            className="text-sm font-semibold underline underline-offset-4 hover:text-ball"
           >
             ← Volver al turnero
           </button>
 
           <div className="text-center space-y-1">
-            <h2 className="text-2xl font-bold text-primary">Tus datos</h2>
-            <p className="text-neutral text-sm">
+            <h2 className="font-display text-4xl text-ball">Tus datos</h2>
+            <p className="text-sm text-line/85">
               {formatDateLabel(selectedDate)} · {selectedSlot} – {endTimeForSelection()} ({duration}{' '}
               min)
             </p>
           </div>
 
-          <div className="bg-surface border border-muted rounded-lg p-5 space-y-4 text-neutral">
+          <div className="space-y-4 rounded-[18px] bg-glass p-5 text-ink">
             <div>
-              <label className="block text-sm mb-1" htmlFor="guest-name">
+              <label className="mb-1 block text-sm font-semibold" htmlFor="guest-name">
                 Nombre
               </label>
               <input
@@ -446,18 +449,18 @@ export default function Turnero() {
                 name="name"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                className="w-full px-3 py-3 rounded border border-muted bg-background text-white text-base"
+                className="w-full rounded-[10px] border-2 border-ink bg-line px-3 py-3 text-base text-ink"
                 placeholder="Tu nombre"
                 autoComplete="name"
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm mb-1" htmlFor="guest-phone">
+              <label className="mb-1 block text-sm font-semibold" htmlFor="guest-phone">
                 Celular
               </label>
               <div className="flex gap-2">
-                <span className="flex items-center px-3 rounded border border-muted bg-muted/30 text-sm">
+                <span className="flex items-center rounded-[10px] border-2 border-ink bg-taken px-3 text-sm">
                   +54
                 </span>
                 <input
@@ -466,18 +469,20 @@ export default function Turnero() {
                   name="tel"
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
-                  className="flex-1 px-3 py-3 rounded border border-muted bg-background text-white text-base"
+                  className="flex-1 rounded-[10px] border-2 border-ink bg-line px-3 py-3 text-base text-ink"
                   placeholder="351 123 4567"
                   autoComplete="tel"
                   inputMode="tel"
                 />
               </div>
             </div>
-            {formError && <p className="text-red-400 text-sm text-center">{formError}</p>}
+            {formError && (
+              <p className="text-center text-sm font-semibold text-red-700">{formError}</p>
+            )}
             <button
               onClick={createBooking}
               disabled={submitting}
-              className="w-full bg-green-600 px-8 py-3 rounded-lg text-white hover:bg-green-700 font-semibold text-lg shadow-lg transition-colors disabled:opacity-60"
+              className="w-full rounded-full bg-ball px-8 py-3 text-lg font-extrabold text-ink transition-colors hover:bg-ball-deep disabled:opacity-60"
             >
               {submitting ? 'Enviando…' : 'Solicitar por WhatsApp'}
             </button>
@@ -492,36 +497,39 @@ export default function Turnero() {
   return (
     <section
       id="turnero"
-      className={`pt-12 px-6 bg-background text-white min-h-[70vh] ${
-        selectedSlot ? 'pb-28' : 'pb-6'
-      }`}
+      aria-label="Turnos disponibles"
+      className="rounded-[28px] bg-court p-4 text-line ring-[6px] ring-ink sm:p-[22px]"
     >
-      <div className="sticky top-16 z-30 bg-background/95 backdrop-blur-sm border-b border-muted py-4 mb-6">
-        <div className="flex justify-center items-center px-4 relative">
-          <div className="flex justify-between items-center max-w-[800px] w-full">
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {getAvailableDates().map((date) => (
-                <button
-                  key={formatDateOnly(date)}
-                  onClick={() => handleDateChange(date)}
-                  className={`flex flex-col items-center justify-center min-w-[60px] h-16 px-3 rounded-lg border-2 transition-all duration-200 ${
-                    isSelected(date)
-                      ? 'bg-accent text-dark border-accent'
-                      : isToday(date)
-                        ? 'bg-surface text-neutral border-accent/50 hover:border-accent'
-                        : 'bg-surface text-neutral border-muted hover:border-accent/50'
-                  }`}
-                >
-                  <span className="text-xs font-medium">{formatDayName(date)}</span>
-                  <span className="text-lg font-bold">{formatDayNumber(date)}</span>
-                  <span className="text-xs">{formatMonth(date)}</span>
-                </button>
-              ))}
-            </div>
+      <h2 className="sr-only">Elegí un turno</h2>
+      <div className="mb-[18px]">
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Día">
+            {getAvailableDates().map((date) => (
+              <button
+                key={formatDateOnly(date)}
+                onClick={() => handleDateChange(date)}
+                aria-pressed={isSelected(date)}
+                className={`flex h-[68px] min-w-[60px] shrink-0 flex-col items-center justify-center rounded-[14px] border-2 px-3 text-sm font-semibold transition-colors ${
+                  isSelected(date)
+                    ? 'border-ball bg-ball text-ink'
+                    : isToday(date)
+                      ? 'border-line/60 text-line hover:border-line hover:bg-line hover:text-court'
+                      : 'border-line/35 text-line hover:border-line hover:bg-line hover:text-court'
+                }`}
+              >
+                <span className="text-xs">{isToday(date) ? 'Hoy' : formatDayName(date)}</span>
+                <span className="text-[22px] font-extrabold leading-6">
+                  {formatDayNumber(date)}
+                </span>
+                <span className="text-xs">{formatMonth(date)}</span>
+              </button>
+            ))}
+          </div>
 
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-sm font-medium text-neutral">Duración</span>
-              <div className="flex border border-muted rounded-lg overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Duración</span>
+              <div className="flex overflow-hidden rounded-full border-2 border-line/70">
                 {[60, 90, 120].map((d) => (
                   <button
                     key={d}
@@ -530,10 +538,10 @@ export default function Turnero() {
                       setSelectedSlot(null);
                       setStep('slots');
                     }}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 text-sm font-semibold transition-colors sm:px-4 ${
                       d === duration
-                        ? 'bg-accent text-dark'
-                        : 'bg-surface text-neutral hover:bg-muted-light'
+                        ? 'bg-ball text-ink'
+                        : 'text-line hover:bg-line hover:text-court'
                     }`}
                   >
                     {d} min
@@ -541,55 +549,57 @@ export default function Turnero() {
                 ))}
               </div>
             </div>
+            <button
+              onClick={() => setShowEarly(!showEarly)}
+              className="rounded-full border-2 border-line px-3 py-2 text-sm font-semibold hover:bg-line hover:text-court"
+            >
+              {showEarly ? 'Ocultar matutinos' : 'Horarios matutinos'}
+            </button>
           </div>
-
-          <button
-            onClick={() => setShowEarly(!showEarly)}
-            className="absolute right-4 bg-accent px-3 py-1 rounded hover:bg-accent-hover text-dark"
-          >
-            {showEarly ? 'Ocultar Matutinos' : 'Horarios Matutinos'}
-          </button>
         </div>
       </div>
 
-      <div className="flex justify-center">
-        <div className="grid grid-cols-1 gap-2 max-w-[800px] w-full">
-          {slots.map(({ start, end }) => {
-            const [h, m] = start.split(':').map(Number);
-            const startMinutes = h * 60 + m;
-            const outsideLimit = startMinutes > 24 * 60 - duration;
-            const fullyReserved = isFullyReserved(start);
-            const canFit = canFitDuration(start, duration);
-            const highlighted = isHighlighted(start);
+      <div className="grid grid-cols-1 gap-[6px]">
+        {slots.map(({ start, end }) => {
+          const [h, m] = start.split(':').map(Number);
+          const startMinutes = h * 60 + m;
+          const outsideLimit = startMinutes > 24 * 60 - duration;
+          const fullyReserved = isFullyReserved(start);
+          const canFit = canFitDuration(start, duration);
+          const highlighted = isHighlighted(start);
 
-            return (
-              <div
-                key={start}
-                className={`h-12 rounded-sm flex items-center justify-center font-medium transition-colors cursor-pointer border-2 ${
-                  fullyReserved
-                    ? 'bg-red-500 text-white border-red-600'
-                    : highlighted
-                      ? 'bg-green-500 text-white border-green-600'
-                      : selectedSlot === start
-                        ? 'bg-blue-500 text-white border-blue-600'
-                        : 'bg-white text-black border-gray-300'
-                }`}
-                onMouseEnter={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) setHoverSlot(start);
-                }}
-                onMouseLeave={() => setHoverSlot(null)}
-                onClick={() => {
-                  if (!fullyReserved && !outsideLimit && canFit) {
-                    setSelectedSlot(start);
-                    setPendingBooking(null);
-                  }
-                }}
-              >
-                {start} - {end}
-              </div>
-            );
-          })}
-        </div>
+          return (
+            <button
+              type="button"
+              key={start}
+              disabled={fullyReserved || outsideLimit || !canFit}
+              aria-pressed={selectedSlot === start}
+              className={`flex h-[42px] items-center justify-center rounded-[10px] border-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
+                fullyReserved
+                  ? 'border-court-deep bg-court-deep text-line/45'
+                  : highlighted
+                    ? 'border-ball bg-ball text-ink'
+                    : selectedSlot === start
+                      ? 'border-ball bg-ball text-ink'
+                      : outsideLimit || !canFit
+                        ? 'border-court-deep bg-court-deep text-line/45'
+                        : 'border-line bg-transparent text-line hover:bg-line hover:text-court'
+              }`}
+              onMouseEnter={() => {
+                if (!fullyReserved && !outsideLimit && canFit) setHoverSlot(start);
+              }}
+              onMouseLeave={() => setHoverSlot(null)}
+              onClick={() => {
+                if (!fullyReserved && !outsideLimit && canFit) {
+                  setSelectedSlot(start);
+                  setPendingBooking(null);
+                }
+              }}
+            >
+              {fullyReserved ? 'Ocupado' : `${start} – ${end}`}
+            </button>
+          );
+        })}
       </div>
 
       {pendingBooking && step === 'slots' && !selectedSlot && (
@@ -597,27 +607,25 @@ export default function Turnero() {
       )}
 
       {selectedSlot && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-muted bg-surface/95 backdrop-blur-sm safe-area-pb">
-          <div className="max-w-[800px] mx-auto px-4 py-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0 text-sm text-neutral">
-              <p className="font-semibold text-primary truncate">
-                {selectedSlot} – {endTimeForSelection()}
-              </p>
-              <p className="text-xs opacity-80 truncate">
-                {formatDateLabel(selectedDate)} · {duration} min
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setFormError('');
-                setStep('guest');
-              }}
-              className="shrink-0 bg-accent text-dark font-semibold px-6 py-3 rounded-lg hover:bg-accent-hover transition shadow-lg"
-            >
-              Continuar
-            </button>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t-2 border-line/50 pt-4">
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="truncate font-semibold">
+              {selectedSlot} – {endTimeForSelection()}
+            </p>
+            <p className="truncate text-xs opacity-80">
+              {formatDateLabel(selectedDate)} · {duration} min
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFormError('');
+              setStep('guest');
+            }}
+            className="shrink-0 rounded-full bg-ball px-5 py-3 font-extrabold text-ink transition-colors hover:bg-ball-deep"
+          >
+            Continuar
+          </button>
         </div>
       )}
     </section>
@@ -626,8 +634,8 @@ export default function Turnero() {
 
 function BookingPending({ booking }: { booking: PendingBooking }) {
   return (
-    <div className="mt-6 bg-yellow-100 p-4 rounded text-black text-center max-w-[800px] mx-auto">
-      <p className="mb-2 font-medium">Tu solicitud quedó pendiente de confirmación.</p>
+    <div className="mx-auto mt-6 max-w-[800px] rounded-[18px] bg-glass p-4 text-center text-ink">
+      <p className="mb-2 font-semibold">Tu solicitud quedó pendiente de confirmación.</p>
       <p className="text-sm mb-3">
         Recepción la verá en el turnero. Si no se abrió WhatsApp, usá el botón de abajo.
       </p>
@@ -636,7 +644,7 @@ function BookingPending({ booking }: { booking: PendingBooking }) {
           href={booking.whatsapp_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700"
+          className="inline-block rounded-full bg-ball px-4 py-2 font-semibold text-ink hover:bg-ball-deep"
         >
           Abrir WhatsApp
         </a>

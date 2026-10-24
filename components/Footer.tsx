@@ -1,37 +1,32 @@
 import Link from 'next/link';
 
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '543517703596';
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
+const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '543517703596';
 
 export default function Footer() {
   return (
-    <footer className="bg-surface text-neutral py-6 border-t border-muted">
-      <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="text-center md:text-left space-y-1 text-sm">
-          <p className="text-base font-semibold text-primary">Mundo Pádel</p>
-          <p>
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:underline"
-            >
-              351 770-3596
-            </a>
-          </p>
-          <p>Baltazar de Ávila 146</p>
-          <p>Córdoba, Argentina</p>
-          <p>© {new Date().getFullYear()} Todos los derechos reservados.</p>
+    <footer className="border-t-2 border-ink bg-ball py-7 text-ink">
+      <div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-4 px-5 text-sm font-semibold md:flex-row md:items-end">
+        <div>
+          <p className="font-display text-2xl">Mundo Pádel</p>
+          <p>Baltazar de Ávila 146 · Córdoba, Argentina</p>
         </div>
-
-        <div className="text-center md:text-right text-sm">
-          <p>
-            Powered by{' '}
+        <div className="md:text-right">
+          <a
+            href={`https://wa.me/${whatsappNumber}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-4 hover:no-underline"
+          >
+            351 770-3596
+          </a>
+          <p>© {new Date().getFullYear()} Mundo Pádel</p>
+          <p className="font-normal">
+            Desarrollado por{' '}
             <Link
               href="https://www.developingbridges.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent hover:underline"
+              className="underline underline-offset-2"
             >
               Developing Bridges
             </Link>
