@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireCronAuth } from '@/lib/cronAuth';
 import {
   addDaysToDateOnly,
   getDayOfWeekBuenosAires,
   getTodayBuenosAires,
 } from '@/lib/timezoneUtils';
+import { createAdminClient } from '@/utils/supabase/admin';
 
 interface BookingToCreate {
   user_id: string;
@@ -21,12 +22,9 @@ interface BookingToCreate {
   created_by: string;
 }
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = createAdminClient();
 
-export async function POST() {
+async function runWeeklyPropagation() {
   try {
     const todayString = getTodayBuenosAires();
     const dayOfWeek = getDayOfWeekBuenosAires(todayString);
@@ -193,15 +191,17 @@ export async function POST() {
   }
 }
 
-export async function GET() {
-  try {
-    console.log('Manual trigger of weekly propagation...');
-    return await POST();
-  } catch (error) {
-    console.error('Error in manual weekly propagation:', error);
-    return NextResponse.json(
-      { error: 'Internal server error during manual weekly propagation' },
-      { status: 500 },
-    );
-  }
+export async function POST(req: Request) {
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
+
+  return runWeeklyPropagation();
+}
+
+// Vercel Cron invokes this configured path with GET and CRON_SECRET authorization.
+export async function GET(req: Request) {
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
+
+  return runWeeklyPropagation();
 }

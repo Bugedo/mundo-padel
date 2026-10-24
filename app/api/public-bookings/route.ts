@@ -4,6 +4,7 @@ import {
   checkRateLimit,
   findOverlappingBookings,
   formatPhoneDisplay,
+  isBookingConflictError,
   normalizeArgentinePhone,
   supabaseAdmin,
 } from '@/lib/bookingUtils';
@@ -11,7 +12,6 @@ import { formatDateDisplay } from '@/lib/timezoneUtils';
 
 interface RecurringBooking {
   id: string;
-  user_id: string;
   court: number;
   start_time: string;
   end_time: string;
@@ -20,11 +20,6 @@ interface RecurringBooking {
   last_date: string | null;
   recurrence_interval_days: number;
   active: boolean;
-  user?: {
-    full_name: string;
-    email: string;
-    phone?: string;
-  };
 }
 
 export async function GET(req: Request) {
@@ -38,7 +33,7 @@ export async function GET(req: Request) {
 
     const { data: regularBookings, error } = await supabaseAdmin
       .from('bookings')
-      .select('*, user:profiles!bookings_user_id_fkey(full_name)')
+      .select('court, date, start_time, end_time, duration_minutes')
       .eq('date', date)
       .neq('cancelled', true)
       .order('start_time', { ascending: true });
@@ -49,7 +44,7 @@ export async function GET(req: Request) {
 
     const { data: recurringBookings, error: recurringError } = await supabaseAdmin
       .from('recurring_bookings')
-      .select('*, user:profiles!recurring_bookings_user_id_fkey(full_name)')
+      .select('id, court, start_time, end_time, duration_minutes, first_date, last_date, recurrence_interval_days, active')
       .eq('active', true)
       .lte('first_date', date)
       .is('last_date', null);
@@ -77,19 +72,11 @@ export async function GET(req: Request) {
     }
 
     const recurringBookingsForDate = applicableRecurringBookings.map((recurring) => ({
-      id: `recurring-${recurring.id}`,
-      user_id: recurring.user_id,
       court: recurring.court,
       date: date,
       start_time: recurring.start_time,
       end_time: recurring.end_time,
       duration_minutes: recurring.duration_minutes,
-      confirmed: true,
-      present: false,
-      cancelled: false,
-      is_recurring: true,
-      recurring_booking_id: recurring.id,
-      user: recurring.user,
     }));
 
     const allBookings = [...(regularBookings || []), ...recurringBookingsForDate];
@@ -177,6 +164,12 @@ export async function POST(req: Request) {
       .single();
 
     if (insertError) {
+      if (isBookingConflictError(insertError)) {
+        return NextResponse.json(
+          { error: 'El horario acaba de ocuparse. Elegí otro turno.' },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 

@@ -5,6 +5,7 @@ import {
   assignCourt,
   findOverlappingBookings,
   formatPhoneDisplay,
+  isBookingConflictError,
   normalizeArgentinePhone,
   supabaseAdmin,
 } from '@/lib/bookingUtils';
@@ -264,6 +265,9 @@ export async function POST(req: Request) {
       .single();
 
     if (insertError) {
+      if (isBookingConflictError(insertError)) {
+        return NextResponse.json({ error: 'Court is already occupied in this time slot' }, { status: 409 });
+      }
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
@@ -287,30 +291,63 @@ export async function PATCH(req: Request) {
     const { id, field, value, updates } = body;
 
     if (updates) {
-      // This is an edit update (from the edit modal or comment update)
-      const { start_time, end_time, duration_minutes, court } = updates;
-
-      // Validate the updates
-      if (start_time && !/^\d{2}:\d{2}$/.test(start_time)) {
-        return NextResponse.json({ error: 'Invalid start_time format' }, { status: 400 });
+      if (!id || typeof updates !== 'object' || Array.isArray(updates)) {
+        return NextResponse.json({ error: 'Missing valid id or updates' }, { status: 400 });
       }
 
-      if (end_time && !/^\d{2}:\d{2}$/.test(end_time)) {
-        return NextResponse.json({ error: 'Invalid end_time format' }, { status: 400 });
+      const allowedUpdateFields = new Set([
+        'date',
+        'start_time',
+        'end_time',
+        'duration_minutes',
+        'court',
+        'comment',
+        'confirmed',
+        'present',
+        'cancelled',
+      ]);
+      const updateEntries = Object.entries(updates);
+      if (updateEntries.length === 0 || updateEntries.some(([key]) => !allowedUpdateFields.has(key))) {
+        return NextResponse.json({ error: 'Updates contain non-editable fields' }, { status: 400 });
       }
 
-      if (duration_minutes && ![60, 90, 120].includes(duration_minutes)) {
-        return NextResponse.json({ error: 'Invalid duration_minutes' }, { status: 400 });
+      const safeUpdates: Record<string, string | number | boolean | null> = {};
+      for (const [key, rawValue] of updateEntries) {
+        if (key === 'date') {
+          if (typeof rawValue !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+            return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
+          }
+          safeUpdates.date = rawValue;
+        } else if (key === 'start_time' || key === 'end_time') {
+          if (typeof rawValue !== 'string' || !/^\d{2}:\d{2}$/.test(rawValue)) {
+            return NextResponse.json({ error: `Invalid ${key} format` }, { status: 400 });
+          }
+          safeUpdates[key] = rawValue;
+        } else if (key === 'duration_minutes') {
+          if (typeof rawValue !== 'number' || ![60, 90, 120].includes(rawValue)) {
+            return NextResponse.json({ error: 'Invalid duration_minutes' }, { status: 400 });
+          }
+          safeUpdates.duration_minutes = rawValue;
+        } else if (key === 'court') {
+          if (typeof rawValue !== 'number' || ![1, 2, 3].includes(rawValue)) {
+            return NextResponse.json({ error: 'Invalid court number' }, { status: 400 });
+          }
+          safeUpdates.court = rawValue;
+        } else if (key === 'comment') {
+          if (rawValue !== null && (typeof rawValue !== 'string' || rawValue.length > 1000)) {
+            return NextResponse.json({ error: 'Invalid comment' }, { status: 400 });
+          }
+          safeUpdates.comment = rawValue;
+        } else if (typeof rawValue !== 'boolean') {
+          return NextResponse.json({ error: `Invalid ${key}` }, { status: 400 });
+        } else {
+          safeUpdates[key] = rawValue;
+        }
       }
 
-      if (court && ![1, 2, 3].includes(court)) {
-        return NextResponse.json({ error: 'Invalid court number' }, { status: 400 });
-      }
-
-      // Get the current booking to check for conflicts
       const { data: currentBooking, error: currentError } = await supabaseAdmin
         .from('bookings')
-        .select('date, court, start_time, duration_minutes')
+        .select('date, court, start_time, end_time, duration_minutes')
         .eq('id', id)
         .single();
 
@@ -318,59 +355,35 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
       }
 
-      // If updating time/court, check for conflicts
-      if (start_time || court) {
-        const { data: existingBookings, error: existingError } = await supabaseAdmin
-          .from('bookings')
-          .select('*')
-          .eq('date', currentBooking.date)
-          .neq('id', id)
-          .neq('cancelled', true);
+      const targetStartTime = String(safeUpdates.start_time ?? currentBooking.start_time).slice(0, 5);
+      const targetEndTime = String(safeUpdates.end_time ?? currentBooking.end_time).slice(0, 5);
+      const targetDuration = Number(safeUpdates.duration_minutes ?? currentBooking.duration_minutes);
+      const toMinutes = (time: string) => {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
 
-        if (existingError) {
-          return NextResponse.json({ error: existingError.message }, { status: 500 });
-        }
-
-        // Check for conflicts
-        const targetCourt = court || currentBooking.court;
-        const targetStartTime = start_time || currentBooking.start_time;
-        const targetDuration = duration_minutes || currentBooking.duration_minutes;
-
-        const conflicts = (existingBookings || []).filter((booking) => {
-          if (booking.court !== targetCourt) return false;
-
-          const [h, m] = targetStartTime.split(':').map(Number);
-          const newStartMinutes = h * 60 + m;
-          const newEndMinutes = newStartMinutes + targetDuration;
-
-          const [bh, bm] = booking.start_time.split(':').map(Number);
-          const bStart = bh * 60 + bm;
-          const bEnd = bStart + (booking.duration_minutes || 90);
-
-          return (
-            (newStartMinutes >= bStart && newStartMinutes < bEnd) ||
-            (newEndMinutes > bStart && newEndMinutes <= bEnd) ||
-            (newStartMinutes <= bStart && newEndMinutes >= bEnd)
-          );
-        });
-
-        if (conflicts.length > 0) {
-          return NextResponse.json(
-            { error: `Court ${targetCourt} is already occupied in this time slot` },
-            { status: 409 },
-          );
-        }
+      if (toMinutes(targetEndTime) <= toMinutes(targetStartTime)) {
+        return NextResponse.json({ error: 'end_time must be after start_time' }, { status: 400 });
+      }
+      if (toMinutes(targetEndTime) - toMinutes(targetStartTime) !== targetDuration) {
+        return NextResponse.json(
+          { error: 'duration_minutes must match the selected time range' },
+          { status: 400 },
+        );
       }
 
-      // Update the booking
       const { data, error: updateError } = await supabaseAdmin
         .from('bookings')
-        .update(updates)
+        .update(safeUpdates)
         .eq('id', id)
         .select()
         .single();
 
       if (updateError) {
+        if (isBookingConflictError(updateError)) {
+          return NextResponse.json({ error: 'Court is already occupied in this time slot' }, { status: 409 });
+        }
         return NextResponse.json({ error: updateError.message }, { status: 500 });
       }
 
@@ -378,7 +391,7 @@ export async function PATCH(req: Request) {
     } else {
       // This is a status update (confirmed, present, cancelled, absent)
       const allowedFields = ['confirmed', 'present', 'cancelled', 'absent'];
-      if (!allowedFields.includes(field)) {
+      if (!id || !allowedFields.includes(field) || (field !== 'absent' && typeof value !== 'boolean')) {
         return NextResponse.json({ error: 'Invalid field for update' }, { status: 400 });
       }
 

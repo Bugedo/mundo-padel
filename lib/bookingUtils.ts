@@ -1,9 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/utils/supabase/admin';
 
-export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+export const supabaseAdmin = createAdminClient();
+
+export function isBookingConflictError(error: { code?: string } | null): boolean {
+  return error?.code === '23P01';
+}
 
 /** Non-cancelled bookings hold the court (pending or confirmed). */
 export function isBookingHoldingSlot(booking: {

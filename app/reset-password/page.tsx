@@ -3,7 +3,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, Eye, EyeOff } from 'lucide-react';
-import supabase from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/client';
+
+const supabase = createClient();
 
 function ResetPasswordForm() {
   const router = useRouter();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 
 // Mock Supabase client
 const mockSupabaseAdmin = {
@@ -47,10 +47,6 @@ jest.mock('@/lib/authUtils', () => ({
 describe('Users API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  afterEach(() => {
-    jest.resetAllMocks();
   });
 
   describe('POST /api/users', () => {

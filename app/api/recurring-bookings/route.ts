@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
+import { isBookingConflictError } from '@/lib/bookingUtils';
 import { addDaysToDateOnly } from '@/lib/timezoneUtils';
+import { createAdminClient } from '@/utils/supabase/admin';
 
 interface BookingToCreate {
   user_id: string | null;
@@ -28,10 +29,7 @@ interface BookingToCreate {
 // }
 
 // Create admin client with service role key for database operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = createAdminClient();
 
 // Helper function to propagate recurring booking for specific dates
 async function propagateRecurringBooking(
@@ -351,6 +349,12 @@ export async function POST(req: Request) {
       });
 
       if (bookingError) {
+        if (isBookingConflictError(bookingError)) {
+          return NextResponse.json(
+            { error: 'Court is already occupied in this time slot' },
+            { status: 409 },
+          );
+        }
         return NextResponse.json(
           { error: `Failed to create initial booking: ${bookingError.message}` },
           { status: 500 },

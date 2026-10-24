@@ -1,6 +1,8 @@
 'use client';
 
-import supabase from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/client';
+
+const supabase = createClient();
 
 export default function LogoutButton({ onLogout }: { onLogout?: () => void }) {
 

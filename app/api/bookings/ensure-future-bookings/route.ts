@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { validateAdminUser } from '@/lib/authUtils';
+import { requireCronAuth } from '@/lib/cronAuth';
 import { addDaysToDateOnly, getTodayBuenosAires } from '@/lib/timezoneUtils';
+import { createAdminClient } from '@/utils/supabase/admin';
 
 interface BookingToCreate {
   user_id: string;
@@ -18,14 +19,14 @@ interface BookingToCreate {
   created_by: string;
 }
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = createAdminClient();
 
 // Manual endpoint to ensure future bookings are always populated
 export async function POST(req: NextRequest) {
   try {
+    const cronAuthError = requireCronAuth(req);
+    if (cronAuthError) return cronAuthError;
+
     const { isAdmin, error: authError } = await validateAdminUser();
     if (!isAdmin) {
       return NextResponse.json({ error: authError || 'Unauthorized' }, { status: 401 });

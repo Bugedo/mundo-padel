@@ -3,7 +3,9 @@
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail } from 'lucide-react';
-import supabase from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/client';
+
+const supabase = createClient();
 
 function LoginForm() {
   const router = useRouter();

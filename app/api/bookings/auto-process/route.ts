@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireCronAuth } from '@/lib/cronAuth';
 import { getTodayBuenosAires, getCurrentTimeBuenosAires } from '@/lib/timezoneUtils';
+import { createAdminClient } from '@/utils/supabase/admin';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = createAdminClient();
 
 // Helper function to process completed bookings (mark as present)
 async function processCompletedBookings() {
@@ -65,14 +63,8 @@ async function processCompletedBookings() {
 
 export async function POST(req: Request) {
   try {
-    // This endpoint can be called by a cron job or external service
-    // For security, we can add a secret key check
-    const authHeader = req.headers.get('authorization');
-    const expectedToken = process.env.CRON_SECRET || 'default-secret';
-
-    if (authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = requireCronAuth(req);
+    if (authError) return authError;
 
     console.log('Starting automatic processing of completed bookings...');
     const result = await processCompletedBookings();
@@ -89,27 +81,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('Error in auto-process bookings:', error);
-    return NextResponse.json(
-      { error: 'Internal server error while processing bookings' },
-      { status: 500 },
-    );
-  }
-}
-
-// Also allow GET for testing purposes
-export async function GET() {
-  try {
-    console.log('Manual trigger of automatic processing...');
-    const result = await processCompletedBookings();
-
-    return NextResponse.json({
-      success: true,
-      processed: result.processed,
-      errors: result.errors,
-      message: `Successfully marked ${result.processed} bookings as completed`,
-    });
-  } catch (error) {
-    console.error('Error in manual auto-process:', error);
     return NextResponse.json(
       { error: 'Internal server error while processing bookings' },
       { status: 500 },
