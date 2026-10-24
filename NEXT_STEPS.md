@@ -10,8 +10,8 @@
 - Rebuild visual de la home HECHO (sin commit) según `docs/mockups/rebuild-home.html` (aprobado): tokens nuevos, fuentes Bagel Fat One + Bricolage, Header/Footer, turnero restyleado con el hover de horarios intacto, secciones Social/TV/Info estáticas. Verificado desktop + mobile 375px sin overflow; build OK.
 
 ## Pendiente
-1. Google OAuth: Nico debe loguear contactomundopadel@gmail.com en Google Cloud (Chrome onlymarimbas). Luego: proyecto GCP, consent screen, OAuth client web con redirect `https://kbinnuiqstdgecqoiwok.supabase.co/auth/v1/callback`, cargar client id/secret en Supabase → Auth → Providers → Google; Site URL + redirect URLs (localhost:3000 y dominio prod).
-2. Código: `app/auth/callback/route.ts`, botón Google en login/turnero, `/perfil` (teléfono, género), reserva autenticada (user.id desde cookies).
+1. HECHO: login solo con Google (GCP proyecto `smooth-reason-512621-v9` en cuenta nebugedo, app publicada; Supabase provider Google ON, email OFF; Site URL www.mundopadelclub.com). Admins (tabla `admin_emails`) ven link 'Panel' en el header. Páginas /privacidad y /terminos.
+2. Pendiente: `/perfil` (teléfono, género) y reserva autenticada (user.id desde cookies).
 3. Social: migración (social_events, social_registrations con level/gender, social_rounds, social_matches, social_match_players) + RLS + Realtime; rutas `/social/[slug]`, `/social/[slug]/check-in` (QR con token), `/social/[slug]/tv`, `/admin/social`, `/admin/social/[id]`; API generate-round usa `generateRound`.
 4. Retoques del turnero que pida Nico.
 5. Preguntas a dueños (hoy son settings por evento): canchas para Social (default 3), política de género, quién fija nivel (admin final).
