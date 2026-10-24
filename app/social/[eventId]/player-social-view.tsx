@@ -1,0 +1,19 @@
+'use client';
+
+import SocialBoard, { playerNames } from '@/components/social/SocialBoard';
+import { createClient } from '@/utils/supabase/client';
+import { useCallback, useEffect, useState } from 'react';
+
+type Board = { event: { title: string; status: string }; attendees: Array<{ attendee_id: string; name: string; gender: string | null; level: number | null; left_at: string | null }>; round: { number: number; status: 'live'; ends_at: string | null; social_matches: Array<{ court: number; team_a: string[]; team_b: string[] }> } | null; next_round: { number: number; status: 'preview'; ends_at: string | null; social_matches: Array<{ court: number; team_a: string[]; team_b: string[] }> } | null };
+
+export default function PlayerSocialView({ eventId }: { eventId: string }) {
+  const [board, setBoard] = useState<Board | null>(null); const [myId, setMyId] = useState<string | null>(null); const [error, setError] = useState('');
+  const load = useCallback(async () => { const response = await fetch(`/api/social/events/${eventId}/board`, { cache: 'no-store' }); const data = await response.json(); if (response.ok) setBoard(data); else setError(data.error || 'No se pudo cargar el social.'); }, [eventId]);
+  useEffect(() => { void load(); void createClient().auth.getUser().then(({ data }) => setMyId(data.user?.id || null)); const interval = window.setInterval(() => void load(), 5000); const channel = createClient().channel(`social-player-${eventId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'social_rounds', filter: `event_id=eq.${eventId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'social_attendees', filter: `event_id=eq.${eventId}` }, () => void load()).subscribe(); return () => { window.clearInterval(interval); void createClient().removeChannel(channel); }; }, [eventId, load]);
+  async function leave() { const response = await fetch('/api/social/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: eventId }) }); if (!response.ok) { const data = await response.json(); return setError(data.error || 'No se pudo registrar la salida.'); } await load(); }
+  if (error) return <main className="mx-auto max-w-4xl p-8"><p className="rounded-lg bg-error/20 p-4 text-error-light">{error}</p></main>;
+  if (!board) return <main className="p-8 text-center text-neutral-muted">Cargando la ronda…</main>;
+  const me = board.attendees.find((attendee) => attendee.attendee_id === myId);
+  const myMatch = board.round?.social_matches.find((match) => [...match.team_a, ...match.team_b].includes(me?.attendee_id || ''));
+  return <main className="mx-auto max-w-5xl space-y-6 p-6"><header className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-bold uppercase tracking-widest text-accent">Social Mundo Pádel</p><h1 className="text-3xl font-extrabold">{board.event.title}</h1></div><button className="rounded-lg border border-error px-3 py-2 text-error-light" onClick={() => void leave()}>Me voy</button></header>{myMatch && me ? <section className="rounded-2xl border border-accent bg-surface p-5"><p className="font-bold text-accent">Tu cancha: {myMatch.court}</p><h2 className="mt-2 text-2xl font-bold">{playerNames(myMatch.team_a.includes(me.attendee_id) ? myMatch.team_a : myMatch.team_b, board.attendees)}</h2><p className="my-2 text-neutral-muted">contra</p><h2 className="text-2xl font-bold">{playerNames(myMatch.team_a.includes(me.attendee_id) ? myMatch.team_b : myMatch.team_a, board.attendees)}</h2></section> : <p className="rounded-xl bg-surface p-4 text-neutral-muted">{board.round ? 'Esta ronda descansás. Mirá la próxima asignación.' : 'Esperando que se inicie la próxima ronda.'}</p>}<SocialBoard attendees={board.attendees} round={board.round || board.next_round} /></main>;
+}

@@ -42,6 +42,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { name: 'Reservas', href: '/admin/bookings' },
     { name: 'Reservas Recurrentes', href: '/admin/recurring-bookings' },
     { name: 'Clientes', href: '/admin/clients' },
+    { name: 'Social', href: '/admin/social' },
   ];
 
   return (
