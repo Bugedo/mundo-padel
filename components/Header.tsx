@@ -42,7 +42,7 @@ export default function Header() {
   const closeMenu = () => setMenuOpen(false);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b-2 border-ink bg-ball text-ink">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-muted bg-background/95 text-neutral backdrop-blur">
       <div className="mx-auto flex h-[76px] max-w-[1180px] items-center gap-5 px-5">
         <Link href="/" aria-label="Mundo Pádel, inicio" className="shrink-0">
           <Image
@@ -68,7 +68,7 @@ export default function Header() {
 
         <Link
           href="/login"
-          className="ml-auto hidden items-center gap-2 rounded-full bg-ink px-[18px] py-[11px] text-[15px] font-semibold text-line transition-colors hover:bg-court md:inline-flex"
+          className="ml-auto hidden items-center gap-2 rounded-full bg-accent px-[18px] py-[11px] text-[15px] font-semibold text-dark transition-colors hover:bg-accent-hover md:inline-flex"
         >
           <GoogleMark />
           Entrar con Google
@@ -79,7 +79,7 @@ export default function Header() {
           aria-expanded={menuOpen}
           aria-controls="mobile-navigation"
           onClick={() => setMenuOpen((open) => !open)}
-          className="ml-auto grid h-11 w-11 place-items-center rounded-full border-2 border-ink md:hidden"
+          className="ml-auto grid h-11 w-11 place-items-center rounded-full border border-muted hover:border-accent md:hidden"
         >
           <span className="sr-only">{menuOpen ? 'Cerrar menú' : 'Abrir menú'}</span>
           {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
@@ -90,7 +90,7 @@ export default function Header() {
         <nav
           id="mobile-navigation"
           aria-label="Principal"
-          className="border-t-2 border-ink bg-ball px-5 pb-5 md:hidden"
+          className="border-t border-muted bg-background px-5 pb-5 md:hidden"
         >
           <div className="mx-auto grid max-w-[1180px] gap-1">
             {links.map((link) => (
@@ -98,7 +98,7 @@ export default function Header() {
                 key={link.href}
                 href={link.href}
                 onClick={closeMenu}
-                className="rounded-lg px-3 py-2 font-semibold hover:bg-ball-deep"
+                className="rounded-lg px-3 py-2 font-semibold hover:bg-surface-light hover:text-accent"
               >
                 {link.label}
               </Link>
@@ -106,7 +106,7 @@ export default function Header() {
             <Link
               href="/login"
               onClick={closeMenu}
-              className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 font-semibold text-line"
+              className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-3 font-semibold text-dark hover:bg-accent-hover"
             >
               <GoogleMark />
               Entrar con Google

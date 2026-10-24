@@ -1,30 +1,20 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-ball: #f3e21b;
-  --color-ball-deep: #e3cf00;
-  --color-ink: #222120;
-  --color-court: #1f4fa0;
-  --color-court-deep: #173c7a;
-  --color-line: #ffffff;
-  --color-glass: #eef2f8;
-  --color-taken: #c9cfd8;
-
-  /* Compatibility aliases used by the admin and authentication screens. */
-  --color-background: #222120;
-  --color-surface: #2e2d2b;
-  --color-surface-light: #3a3936;
-  --color-muted: #55534f;
-  --color-muted-light: #77746e;
-  --color-neutral: #eef2f8;
-  --color-neutral-muted: #c9cfd8;
-  --color-primary: #f3e21b;
-  --color-primary-hover: #e3cf00;
-  --color-primary-light: #fff6b3;
-  --color-accent: #f3e21b;
-  --color-accent-hover: #e3cf00;
-  --color-accent-muted: #d4c500;
-  --color-accent-light: #fff6b3;
+  --color-background: #1a1a1a;
+  --color-surface: #2a2a2a;
+  --color-surface-light: #3a3a3a;
+  --color-muted: #404040;
+  --color-muted-light: #505050;
+  --color-neutral: #e5e5e5;
+  --color-neutral-muted: #b0b0b0;
+  --color-primary: #7a7a7a;
+  --color-primary-hover: #8a8a8a;
+  --color-primary-light: #9a9a9a;
+  --color-accent: #c1de14;
+  --color-accent-hover: #d1ee24;
+  --color-accent-muted: #a1ce04;
+  --color-accent-light: #e1fe34;
   --color-error: #ef4444;
   --color-error-light: #fca5a5;
   --color-success: #22c55e;
@@ -32,14 +22,12 @@
   --color-warning: #f59e0b;
   --color-warning-light: #fcd34d;
   --color-brand-white: #ffffff;
-  --color-brand-gray: #c9cfd8;
-  --color-brand-black: #222120;
-  --color-brand-green: #f3e21b;
-  --color-dark: #222120;
+  --color-brand-gray: #7a7a7a;
+  --color-brand-black: #000000;
+  --color-brand-green: #c1de14;
+  --color-dark: #000000;
   --color-light: #ffffff;
 
-  --font-display: var(--font-bagel), sans-serif;
-  --font-body: var(--font-bricolage), system-ui, sans-serif;
 }
 
 * {
@@ -48,20 +36,20 @@
 
 html {
   scroll-behavior: smooth;
-  background: var(--color-line);
+  background: var(--color-background);
 }
 
 body {
   margin: 0;
   font-family: var(--font-bricolage), system-ui, sans-serif;
-  color: var(--color-ink);
-  background: var(--color-line);
+  color: var(--color-neutral);
+  background: var(--color-background);
   font-size: 17px;
   line-height: 1.5;
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-ball);
+  outline: 3px solid var(--color-accent);
   outline-offset: 3px;
 }
 
