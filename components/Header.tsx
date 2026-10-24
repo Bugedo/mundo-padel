@@ -4,7 +4,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import GoogleSignIn from '@/components/GoogleSignIn';
 import LogoutButton from '@/components/LogoutButton';
 import { useUser } from '@/context/UserContext';
 import { createClient } from '@/utils/supabase/client';
@@ -17,30 +19,17 @@ const links = [
   { href: '#info', label: 'Cómo llegar' },
 ];
 
-function GoogleMark() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]">
-      <path
-        fill="currentColor"
-        d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"
-      />
-      <path
-        fill="currentColor"
-        d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"
-        opacity=".75"
-      />
-      <path
-        fill="currentColor"
-        d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"
-        opacity=".55"
-      />
-      <path
-        fill="currentColor"
-        d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10C7.2 7.7 9.4 6 12 6z"
-        opacity=".9"
-      />
-    </svg>
-  );
+function getLoginDestination() {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+
+  const requestedNext = new URLSearchParams(window.location.search).get('next');
+  if (window.location.pathname === '/login' && requestedNext) {
+    return requestedNext;
+  }
+
+  return `${window.location.pathname}${window.location.search}`;
 }
 
 function UserIdentity({ user }: { user: SupabaseUser }) {
@@ -77,10 +66,10 @@ function UserIdentity({ user }: { user: SupabaseUser }) {
 
 export default function Header() {
   const { user: profile } = useUser();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [authError, setAuthError] = useState('');
-  const [oauthLoading, setOauthLoading] = useState(false);
   const closeMenu = () => setMenuOpen(false);
 
   useEffect(() => {
@@ -94,24 +83,6 @@ export default function Header() {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const handleGoogleLogin = async () => {
-    setOauthLoading(true);
-    setAuthError('');
-
-    const next = `${window.location.pathname}${window.location.search}`;
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-
-    if (error) {
-      setAuthError(`No pudimos iniciar sesión con Google: ${error.message}`);
-      setOauthLoading(false);
-    }
-  };
 
   const authActions = authUser ? (
     <>
@@ -131,15 +102,13 @@ export default function Header() {
       />
     </>
   ) : (
-    <button
-      type="button"
-      onClick={handleGoogleLogin}
-      disabled={oauthLoading}
-      className="inline-flex items-center justify-center gap-2 rounded-full bg-accent px-[18px] py-[11px] text-[15px] font-semibold text-dark transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      <GoogleMark />
-      {oauthLoading ? 'Redirigiendo…' : 'Entrar con Google'}
-    </button>
+    <GoogleSignIn
+      next={getLoginDestination()}
+      oneTap={pathname === '/'}
+      size="medium"
+      type="standard"
+      onError={setAuthError}
+    />
   );
 
   return (
