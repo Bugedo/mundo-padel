@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { formatSocialDateTime, socialDateTimeWithOffset, socialStatusLabel } from '@/lib/social';
 
 type Event = { id: string; title: string; starts_at: string; courts: number; round_minutes: number; gender_policy: string; status: 'draft' | 'open' | 'closed' };
 const input = 'w-full rounded-lg border border-muted bg-background px-3 py-2 text-neutral';
@@ -19,10 +20,14 @@ export default function AdminSocialPage() {
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setCreating(true); setError('');
     const form = new FormData(event.currentTarget);
-    const response = await fetch('/api/social/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(form)) });
+    const startsAt = socialDateTimeWithOffset(String(form.get('starts_at') || ''));
+    if (!startsAt) { setCreating(false); setError('Fecha y hora inválidas.'); return; }
+    const payload = { ...Object.fromEntries(form), starts_at: startsAt };
+    const response = await fetch('/api/social/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await response.json(); setCreating(false);
     if (!response.ok) return setError(data.error || 'No se pudo crear el evento.');
-    event.currentTarget.reset(); await load();
+    setEvents((current) => [data as Event, ...current.filter((item) => item.id !== data.id)]);
+    event.currentTarget.reset();
   }
   async function status(id: string, next: Event['status']) {
     const response = await fetch(`/api/social/events/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: next }) });
@@ -41,7 +46,7 @@ export default function AdminSocialPage() {
     </form>
     {error && <p className="rounded-lg bg-error/20 p-3 text-error-light">{error}</p>}
     <div className="grid gap-4">
-      {events.map((event) => <article key={event.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-muted bg-surface p-5"><div><h2 className="text-xl font-bold">{event.title}</h2><p className="text-neutral-muted">{new Date(event.starts_at).toLocaleString('es-AR')} · {event.courts} canchas · {event.round_minutes} min · <span className="text-accent">{event.status}</span></p></div><div className="flex gap-2"><Link className="rounded-lg bg-accent px-3 py-2 font-bold text-dark" href={`/admin/social/${event.id}`}>Abrir</Link>{event.status !== 'open' && <button onClick={() => void status(event.id, 'open')} className="rounded-lg border border-accent px-3 py-2 text-accent">Abrir check-in</button>}{event.status === 'open' && <button onClick={() => void status(event.id, 'closed')} className="rounded-lg border border-muted px-3 py-2">Cerrar</button>}</div></article>)}
+      {events.map((event) => <article key={event.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-muted bg-surface p-5"><div><h2 className="text-xl font-bold">{event.title}</h2><p className="text-neutral-muted">{formatSocialDateTime(event.starts_at)} · {event.courts} canchas · {event.round_minutes} min · <span className="text-accent">{socialStatusLabel(event.status)}</span></p></div><div className="flex gap-2"><Link className="rounded-lg bg-accent px-3 py-2 font-bold text-dark" href={`/admin/social/${event.id}`}>Abrir</Link>{event.status !== 'open' && <button onClick={() => void status(event.id, 'open')} className="rounded-lg border border-accent px-3 py-2 text-accent">Abrir check-in</button>}{event.status === 'open' && <button onClick={() => void status(event.id, 'closed')} className="rounded-lg border border-muted px-3 py-2">Cerrar</button>}</div></article>)}
       {!events.length && <p className="text-neutral-muted">Todavía no hay eventos.</p>}
     </div>
   </div>;

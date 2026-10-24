@@ -15,3 +15,8 @@
 3. Social: migración (social_events, social_registrations con level/gender, social_rounds, social_matches, social_match_players) + RLS + Realtime; rutas `/social/[slug]`, `/social/[slug]/check-in` (QR con token), `/social/[slug]/tv`, `/admin/social`, `/admin/social/[id]`; API generate-round usa `generateRound`.
 4. Retoques del turnero que pida Nico.
 5. Preguntas a dueños (hoy son settings por evento): canchas para Social (default 3), política de género, quién fija nivel (admin final).
+
+## Social (2026-10-24)
+- EN PRODUCCIÓN: Panel → Social (crear evento, QR check-in, pool en vivo, Armar/Regenerar ronda, cambios manuales tocando 2 jugadores, Fijar cancha, Iniciar ronda), `/social/checkin/[token]`, `/social/[eventId]` (jugador), `/social/[eventId]/tv`. Migración `20261025100000_social.sql` ya aplicada en Supabase.
+- Probado en prod: crear evento, invitados, armar ronda balanceada. NO probado: check-in por QR desde celular, vista jugador, TV, Realtime con varios dispositivos.
+- Pendiente: probar un viernes real; `/perfil` (teléfono); reserva autenticada con user.id; verificación de marca de Google (DNS en Search Console) para que diga "Mundo Padel".

@@ -3,6 +3,8 @@ import type { Gender, GenderPolicy, Match, PastRound, PoolPlayer } from '@/lib/s
 export const GENDERS: Gender[] = ['M', 'F', 'X'];
 export const GENDER_POLICIES: GenderPolicy[] = ['libre', 'preferir_mixto', 'separado'];
 export const EVENT_STATUSES = ['draft', 'open', 'closed'] as const;
+export const SOCIAL_TIME_ZONE = 'America/Argentina/Cordoba';
+const SOCIAL_UTC_OFFSET = '-03:00';
 
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 export type SocialAttendee = {
@@ -28,6 +30,52 @@ export function isGenderPolicy(value: unknown): value is GenderPolicy {
 
 export function isEventStatus(value: unknown): value is EventStatus {
   return typeof value === 'string' && EVENT_STATUSES.includes(value as EventStatus);
+}
+
+export function socialStatusLabel(status: string): string {
+  const labels: Record<EventStatus, string> = { draft: 'Borrador', open: 'Abierto', closed: 'Cerrado' };
+  return isEventStatus(status) ? labels[status] : status;
+}
+
+/**
+ * `datetime-local` has no timezone. Social events always use Cordoba's UTC-3
+ * wall clock, so attach that offset before sending the value to the database.
+ */
+export function socialDateTimeWithOffset(value: string): string | null {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::\d{2}(?:\.\d{1,3})?)?$/);
+  if (!match) return null;
+  const [datePart, timePart] = match[1].split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const local = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (local.getUTCFullYear() !== year || local.getUTCMonth() !== month - 1 || local.getUTCDate() !== day || local.getUTCHours() !== hour || local.getUTCMinutes() !== minute) return null;
+  const withOffset = `${match[1]}:00${SOCIAL_UTC_OFFSET}`;
+  return Number.isNaN(new Date(withOffset).valueOf()) ? null : withOffset;
+}
+
+/** Parse either an ISO instant or a timezone-less Social datetime-local value. */
+export function parseSocialDateTime(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value) return null;
+  const normalized = socialDateTimeWithOffset(value) ?? value;
+  const date = new Date(normalized);
+  return Number.isNaN(date.valueOf()) ? null : date;
+}
+
+/** Format Social instants consistently, without seconds, in the club timezone. */
+export function formatSocialDateTime(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.valueOf())) return '';
+  const parts = new Intl.DateTimeFormat('es-AR', {
+    timeZone: SOCIAL_TIME_ZONE,
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('weekday').replace('.', '')} ${part('day')}/${part('month')}, ${part('hour')}:${part('minute')}`;
 }
 
 export function socialLevel(value: unknown): number | null {

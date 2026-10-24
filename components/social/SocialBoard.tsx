@@ -7,7 +7,14 @@ type BoardMatch = { court: number; team_a: string[]; team_b: string[] };
 type BoardRound = { number: number; status: 'preview' | 'live' | 'done'; ends_at: string | null; social_matches: BoardMatch[] };
 
 export function playerNames(ids: string[], people: BoardAttendee[]) {
-  return ids.map((id) => people.find((person) => person.attendee_id === id)?.name || 'Jugador/a').join(' + ');
+  return ids.map((id) => {
+    const player = people.find((person) => person.attendee_id === id);
+    return `${player?.name || 'Jugador/a'} ${player?.level ?? '—'}`;
+  }).join(' + ');
+}
+
+function teamTotal(ids: string[], people: BoardAttendee[]) {
+  return ids.reduce((total, id) => total + (people.find((person) => person.attendee_id === id)?.level ?? 0), 0);
 }
 
 export default function SocialBoard({ attendees, round, showBench = true, large = false }: { attendees: BoardAttendee[]; round: BoardRound | null; showBench?: boolean; large?: boolean }) {
@@ -25,9 +32,15 @@ export default function SocialBoard({ attendees, round, showBench = true, large 
         {round.social_matches.map((match) => (
           <article key={match.court} className="rounded-2xl border border-accent-muted bg-surface-light p-5 shadow-lg">
             <p className="mb-3 text-sm font-bold uppercase tracking-wider text-accent">Cancha {match.court}</p>
-            <p className={large ? 'text-2xl font-bold' : 'text-lg font-bold'}>{playerNames(match.team_a, attendees)}</p>
-            <p className="my-2 text-center text-sm text-neutral-muted">vs</p>
-            <p className={large ? 'text-2xl font-bold' : 'text-lg font-bold'}>{playerNames(match.team_b, attendees)}</p>
+            <div className="rounded-xl bg-muted p-3">
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-neutral-muted">Pareja A</p>
+              <p className={large ? 'text-2xl font-bold' : 'text-lg font-bold'}>{playerNames(match.team_a, attendees)} <span className="whitespace-nowrap text-accent">= {teamTotal(match.team_a, attendees)}</span></p>
+            </div>
+            <p className="my-3 text-center text-sm font-bold text-neutral-muted">vs</p>
+            <div className="rounded-xl bg-muted p-3">
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-neutral-muted">Pareja B</p>
+              <p className={large ? 'text-2xl font-bold' : 'text-lg font-bold'}>{playerNames(match.team_b, attendees)} <span className="whitespace-nowrap text-accent">= {teamTotal(match.team_b, attendees)}</span></p>
+            </div>
           </article>
         ))}
       </div>

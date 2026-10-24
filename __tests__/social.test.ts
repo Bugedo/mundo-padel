@@ -1,4 +1,4 @@
-import { attendeeGender, attendeeLevel, attendeeName, isGender, isGenderPolicy, positiveInteger, validateDistinctMatches } from '@/lib/social';
+import { attendeeGender, attendeeLevel, attendeeName, formatSocialDateTime, isGender, isGenderPolicy, parseSocialDateTime, positiveInteger, socialDateTimeWithOffset, socialStatusLabel, validateDistinctMatches } from '@/lib/social';
 
 describe('social validation helpers', () => {
   it('accepts only defined gender policies and bounded integer levels', () => {
@@ -25,5 +25,17 @@ describe('social validation helpers', () => {
     expect(attendeeName(attendee)).toBe('Invitada');
     expect(attendeeGender(attendee)).toBe('F');
     expect(attendeeLevel(attendee)).toBe(6);
+  });
+
+  it('treats datetime-local values as Cordoba time and displays them without seconds', () => {
+    expect(socialDateTimeWithOffset('2026-10-31T20:00')).toBe('2026-10-31T20:00:00-03:00');
+    expect(parseSocialDateTime('2026-10-31T20:00')?.toISOString()).toBe('2026-10-31T23:00:00.000Z');
+    expect(formatSocialDateTime('2026-10-31T23:00:00.000Z')).toBe('sáb 31/10, 20:00');
+  });
+
+  it('uses Spanish labels for event statuses', () => {
+    expect(socialStatusLabel('draft')).toBe('Borrador');
+    expect(socialStatusLabel('open')).toBe('Abierto');
+    expect(socialStatusLabel('closed')).toBe('Cerrado');
   });
 });

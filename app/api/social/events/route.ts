@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
-import { isGenderPolicy, positiveInteger } from '@/lib/social';
+import { isGenderPolicy, parseSocialDateTime, positiveInteger } from '@/lib/social';
 import { requestBody, requireSocialAdmin, socialError } from '@/lib/socialApi';
 
 export async function GET() {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const body = await requestBody(request);
     const title = String(body?.title || '').trim();
-    const startsAt = typeof body?.starts_at === 'string' ? new Date(body.starts_at) : null;
+    const startsAt = parseSocialDateTime(body?.starts_at);
     const courts = positiveInteger(body?.courts ?? 3, 1, 10);
     const minutes = positiveInteger(body?.round_minutes ?? 15, 5, 120);
     if (!title || !startsAt || Number.isNaN(startsAt.valueOf()) || !courts || !minutes || !isGenderPolicy(body?.gender_policy ?? 'preferir_mixto')) {
